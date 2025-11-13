@@ -296,6 +296,14 @@ public class CodeEditorFragment extends Fragment implements SimpleSoraTabAdapter
     }
 
     @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (tabAdapter != null) {
+            tabAdapter.cleanup();
+        }
+    }
+
+    @Override
     public void onDetach() {
         super.onDetach();
         listener = null; // Clear the listener to prevent memory leaks

@@ -27,7 +27,6 @@ import java.util.HashMap;
 import java.util.stream.Collectors;
 import android.widget.RadioGroup;
 import com.codex.apk.ai.AIProvider;
-import com.codex.apk.ai.AIProvider;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -171,7 +170,7 @@ public class MainActivity extends AppCompatActivity {
         final int count = projectsAdapter.getSelectedCount();
         new MaterialAlertDialogBuilder(this, R.style.AlertDialogCustom)
                 .setTitle(getString(R.string.delete_project))
-                .setMessage("Delete " + count + " selected project" + (count > 1 ? "s" : "") + "?")
+                .setMessage(getResources().getQuantityString(R.plurals.delete_multiple_projects, count, count))
                 .setPositiveButton(getString(R.string.delete), (dialog, which) -> {
                     for (File projectDir : projectsAdapter.getSelectedProjectFiles()) {
                         if (projectDir != null) {
@@ -223,20 +222,29 @@ public class MainActivity extends AppCompatActivity {
     private void loadProjects() {
         projectManager.loadProjectsList();
 
-        // First, populate recent projects, always sorted by date
-        ArrayList<HashMap<String, Object>> sortedForRecent = new ArrayList<>(projectsList);
-        Collections.sort(sortedForRecent, (p1, p2) -> Long.compare((long) p2.get("lastModifiedTimestamp"), (long) p1.get("lastModifiedTimestamp")));
+        // Sort the main list according to the user's preference
+        sortProjects();
+
+        // Now, populate recent projects
+        // If the main list is already sorted by date, we don't need to sort again
+        ArrayList<HashMap<String, Object>> sortedForRecent;
+        if (currentSortOption == R.id.radio_date_newest) {
+            sortedForRecent = projectsList;
+        } else {
+            // Otherwise, create a sorted copy for the recent projects list
+            sortedForRecent = new ArrayList<>(projectsList);
+            Collections.sort(sortedForRecent, (p1, p2) -> Long.compare((long) p2.get("lastModifiedTimestamp"), (long) p1.get("lastModifiedTimestamp")));
+        }
+
         recentProjectsList.clear();
         if (sortedForRecent.size() > 5) {
             recentProjectsList.addAll(sortedForRecent.subList(0, 5));
         } else {
             recentProjectsList.addAll(sortedForRecent);
         }
-        recentProjectsAdapter.notifyDataSetChanged();
 
-        // Now, sort the main list according to the user's preference
-        sortProjects();
         projectsAdapter.notifyDataSetChanged();
+        recentProjectsAdapter.notifyDataSetChanged();
 
         updateEmptyStateVisibility();
     }

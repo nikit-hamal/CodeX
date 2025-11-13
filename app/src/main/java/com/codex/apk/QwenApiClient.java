@@ -247,7 +247,7 @@ public class QwenApiClient implements StreamingApiClient {
                 if (aborted[0]) return;
                 rawSse.append("data: ").append(chunk.toString()).append('\n');
 
-                if (QwenStreamProcessor.isErrorChunk(chunk)) {
+                if (QwenStreamProcessor.isErrorChunk(chunk) || (chunk.has("success") && !chunk.get("success").getAsBoolean() && chunk.has("data") && chunk.getAsJsonObject("data").has("code") && "RateLimited".equals(chunk.getAsJsonObject("data").get("code").getAsString()))) {
                     if (!retriedJsonError[0]) {
                         retriedJsonError[0] = true;
                         aborted[0] = true;
@@ -272,7 +272,7 @@ public class QwenApiClient implements StreamingApiClient {
 
             @Override
             public void onError(String message, int code) {
-                if ((code == 401 || code == 403 || code == 429) && !retriedHttpError[0]) {
+                if (((code == 401 || code == 403 || code == 429) || (message != null && message.contains("RateLimited"))) && !retriedHttpError[0]) {
                     retriedHttpError[0] = true;
                     aborted[0] = true;
                     try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}

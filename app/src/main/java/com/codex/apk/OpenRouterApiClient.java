@@ -158,12 +158,28 @@ public class OpenRouterApiClient implements StreamingApiClient {
                     }
                     @Override public void onComplete() {
                         activeStreams.remove(request.getRequestId());
-                        QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                        finalResponse.action = "message";
-                        finalResponse.explanation = finalText.toString();
-                        finalResponse.rawResponse = rawSse.toString();
-                        finalResponse.isValid = true;
-                        listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                        String finalContent = finalText.toString();
+                        QwenResponseParser.ParsedResponse finalResponse;
+                        if (QwenResponseParser.looksLikeJson(finalContent)) {
+                            finalResponse = QwenResponseParser.parseResponse(finalContent);
+                        } else {
+                            finalResponse = new QwenResponseParser.ParsedResponse();
+                            finalResponse.action = "message";
+                            finalResponse.explanation = finalContent;
+                        }
+                        if (finalResponse != null) {
+                            finalResponse.rawResponse = rawSse.toString();
+                            finalResponse.isValid = true;
+                            listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                        } else {
+                            // Fallback if parsing fails
+                            QwenResponseParser.ParsedResponse fallback = new QwenResponseParser.ParsedResponse();
+                            fallback.action = "message";
+                            fallback.explanation = finalContent;
+                            fallback.rawResponse = rawSse.toString();
+                            fallback.isValid = true;
+                            listener.onStreamCompleted(request.getRequestId(), fallback);
+                        }
                     }
                 });
             } catch (Exception e) {
