@@ -45,11 +45,12 @@ public class QwenConversationManager {
         requestBody.addProperty("chat_type", webSearchEnabled ? "search" : "t2t");
         requestBody.addProperty("timestamp", System.currentTimeMillis());
 
-        String qwenToken = midTokenManager.ensureMidToken(false);
+        String qwenToken = midTokenManager.ensureTokens(false);
+        String identity = midTokenManager.getIdentity();
         Request request = new Request.Builder()
                 .url(QWEN_BASE_URL + "/chats/new")
                 .post(RequestBody.create(requestBody.toString(), MediaType.parse("application/json")))
-                .headers(QwenRequestFactory.buildQwenHeaders(qwenToken, null))
+                .headers(QwenRequestFactory.buildQwenHeaders(qwenToken, null, identity))
                 .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
@@ -62,11 +63,12 @@ public class QwenConversationManager {
             } else {
                 int code = response.code();
                 if (code == 401 || code == 429 || code == 403) {
-                    qwenToken = midTokenManager.ensureMidToken(true);
+                    qwenToken = midTokenManager.ensureTokens(true);
+                    identity = midTokenManager.getIdentity();
                     Request retry = new Request.Builder()
                             .url(QWEN_BASE_URL + "/chats/new")
                             .post(RequestBody.create(requestBody.toString(), MediaType.parse("application/json")))
-                            .headers(QwenRequestFactory.buildQwenHeaders(qwenToken, null))
+                            .headers(QwenRequestFactory.buildQwenHeaders(qwenToken, null, identity))
                             .build();
                     try (Response resp2 = httpClient.newCall(retry).execute()) {
                         if (resp2.isSuccessful() && resp2.body() != null) {

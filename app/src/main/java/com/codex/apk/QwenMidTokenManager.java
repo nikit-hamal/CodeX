@@ -14,28 +14,32 @@ public class QwenMidTokenManager {
     private static final String TAG = "QwenMidTokenManager";
     private static final String PREFS_NAME = "ai_chat_prefs";
     private static final String QWEN_MIDTOKEN_KEY = "qwen_midtoken";
+    private static final String QWEN_IDENTITY_KEY = "qwen_identity";
     private static final Pattern MIDTOKEN_PATTERN = Pattern.compile("(?:umx\\.wu|__fycb)\\('([^']+)'\\)");
 
     private final OkHttpClient httpClient;
     private final SharedPreferences sharedPreferences;
     private volatile String midToken = null;
+    private volatile String identity = null;
 
     public QwenMidTokenManager(Context context, OkHttpClient httpClient) {
         this.httpClient = httpClient;
         this.sharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         try {
             this.midToken = sharedPreferences.getString(QWEN_MIDTOKEN_KEY, null);
+            this.identity = sharedPreferences.getString(QWEN_IDENTITY_KEY, null);
             if (this.midToken != null) {
                 Log.i(TAG, "Loaded persisted midtoken.");
             }
         } catch (Exception ignored) {}
     }
 
-    public synchronized String ensureMidToken(boolean forceRefresh) throws IOException {
+    public synchronized String ensureTokens(boolean forceRefresh) throws IOException {
         if (forceRefresh) {
-            Log.w(TAG, "Force refreshing midtoken");
+            Log.w(TAG, "Force refreshing tokens");
             this.midToken = null;
-            sharedPreferences.edit().remove(QWEN_MIDTOKEN_KEY).apply();
+            this.identity = null;
+            sharedPreferences.edit().remove(QWEN_MIDTOKEN_KEY).remove(QWEN_IDENTITY_KEY).apply();
         }
         if (midToken != null) {
             Log.i(TAG, "Reusing existing midtoken");
@@ -59,9 +63,19 @@ public class QwenMidTokenManager {
                 throw new IOException("Failed to extract bx-umidtoken");
             }
             midToken = m.group(1);
-            try { sharedPreferences.edit().putString(QWEN_MIDTOKEN_KEY, midToken).apply(); } catch (Exception ignore) {}
-            Log.i(TAG, "Obtained and saved new midtoken.");
+            identity = java.util.UUID.randomUUID().toString();
+            try {
+                sharedPreferences.edit()
+                    .putString(QWEN_MIDTOKEN_KEY, midToken)
+                    .putString(QWEN_IDENTITY_KEY, identity)
+                    .apply();
+            } catch (Exception ignore) {}
+            Log.i(TAG, "Obtained and saved new tokens.");
             return midToken;
         }
+    }
+
+    public String getIdentity() {
+        return identity;
     }
 }

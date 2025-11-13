@@ -307,21 +307,8 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
 
     // --- Implement AIAssistant.AIActionListener methods ---
     @Override
-    public void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions, List<ChatMessage.FileActionDetail> proposedFileChanges, String aiModelDisplayName) {
-        onAiActionsProcessedInternal(rawAiResponseJson, explanation, suggestions, proposedFileChanges, new ArrayList<>(), aiModelDisplayName, null, null);
-    }
-
-    @Override
-    public void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions, List<ChatMessage.FileActionDetail> proposedFileChanges, List<ChatMessage.PlanStep> planSteps, String aiModelDisplayName) {
-        onAiActionsProcessedInternal(rawAiResponseJson, explanation, suggestions, proposedFileChanges, planSteps, aiModelDisplayName, null, null);
-    }
-
-    public void onAiActionsProcessed(String rawAiResponseJson, String explanation,
-                                   List<String> suggestions,
-                                   List<ChatMessage.FileActionDetail> proposedFileChanges, String aiModelDisplayName,
-                                   String thinkingContent, List<WebSource> webSources) {
-        // This method now delegates to the new internal method, creating an empty plan list.
-        onAiActionsProcessedInternal(rawAiResponseJson, explanation, suggestions, proposedFileChanges, new ArrayList<>(), aiModelDisplayName, thinkingContent, webSources);
+    public void onAiActionsProcessed(com.codex.apk.ai.ParsedResponse response, String aiModelDisplayName) {
+        onAiActionsProcessedInternal(response.rawResponse, response.explanation, response.suggestions, response.fileChanges, response.planSteps, aiModelDisplayName, null, null);
     }
 
     private void onAiActionsProcessedInternal(String rawAiResponseJson, String explanation,
@@ -531,17 +518,8 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
     }
 
     @Override
-    public void onStreamCompleted(String requestId, com.codex.apk.QwenResponseParser.ParsedResponse response) {
-        onAiActionsProcessedInternal(
-            response.rawResponse,
-            response.explanation,
-            new ArrayList<>(),
-            com.codex.apk.QwenResponseParser.toFileActionDetails(response),
-            com.codex.apk.QwenResponseParser.toPlanSteps(response),
-            aiAssistant.getCurrentModel().getDisplayName(),
-            null,
-            null
-        );
+    public void onStreamCompleted(String requestId, com.codex.apk.ai.ParsedResponse response) {
+        onAiActionsProcessed(response, aiAssistant.getCurrentModel().getDisplayName());
         onAiRequestCompleted();
     }
 

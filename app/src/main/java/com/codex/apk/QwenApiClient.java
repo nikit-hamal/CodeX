@@ -77,14 +77,14 @@ public class QwenApiClient implements StreamingApiClient {
     public List<AIModel> fetchModels() {
         String mid;
         try {
-            mid = midTokenManager.ensureMidToken(false);
+            mid = midTokenManager.ensureTokens(false);
         } catch (IOException e) {
             Log.e(TAG, "Failed to fetch midtoken for models", e);
             return new java.util.ArrayList<>();
         }
         Request request = new Request.Builder()
                 .url(QWEN_BASE_URL + "/models")
-                .headers(QwenRequestFactory.buildQwenHeaders(mid, null))
+                .headers(QwenRequestFactory.buildQwenHeaders(mid, null, null))
                 .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
@@ -225,8 +225,9 @@ public class QwenApiClient implements StreamingApiClient {
 
     private void performStreamingCompletion(MessageRequest request, QwenConversationState state, StreamListener listener) throws IOException {
         JsonObject requestBody = QwenRequestFactory.buildCompletionRequestBody(state, request.getModel(), request.isThinkingModeEnabled(), request.isWebSearchEnabled(), request.getEnabledTools(), request.getMessage());
-        String qwenToken = midTokenManager.ensureMidToken(false);
-        okhttp3.Headers headers = QwenRequestFactory.buildQwenHeaders(qwenToken, state.getConversationId())
+        String qwenToken = midTokenManager.ensureTokens(false);
+        String identity = midTokenManager.getIdentity();
+        okhttp3.Headers headers = QwenRequestFactory.buildQwenHeaders(qwenToken, state.getConversationId(), identity)
                 .newBuilder().set("Accept", "text/event-stream").build();
 
         SseClient sse = new SseClient(httpClient);
@@ -248,17 +249,20 @@ public class QwenApiClient implements StreamingApiClient {
                 rawSse.append("data: ").append(chunk.toString()).append('\n');
 
                 if (QwenStreamProcessor.isErrorChunk(chunk)) {
-                    if (!retriedJsonError[0]) {
-                        retriedJsonError[0] = true;
-                        aborted[0] = true;
-                        try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}
-                        new Thread(() -> {
-                            try { performStreamingCompletion(request, state, listener); } catch (IOException ignore) {}
-                        }).start();
-                        return;
-                    } else {
-                        listener.onStreamError(request.getRequestId(), "Qwen API Error after retry", null);
-                        return;
+                    String errorMessage = chunk.toString();
+                    if (errorMessage.contains("RateLimited")) {
+                        if (!retriedJsonError[0]) {
+                            retriedJsonError[0] = true;
+                            aborted[0] = true;
+                            try { midTokenManager.ensureTokens(true); } catch (Exception ignore) {}
+                            new Thread(() -> {
+                                try { performStreamingCompletion(request, state, listener); } catch (IOException ignore) {}
+                            }).start();
+                            return;
+                        } else {
+                            listener.onStreamError(request.getRequestId(), "Qwen API Error after retry", null);
+                            return;
+                        }
                     }
                 }
 
@@ -272,10 +276,10 @@ public class QwenApiClient implements StreamingApiClient {
 
             @Override
             public void onError(String message, int code) {
-                if ((code == 401 || code == 403 || code == 429) && !retriedHttpError[0]) {
+                if ((code == 401 || code == 403 || code == 429 || message.contains("RateLimited")) && !retriedHttpError[0]) {
                     retriedHttpError[0] = true;
                     aborted[0] = true;
-                    try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}
+                    try { midTokenManager.ensureTokens(true); } catch (Exception ignore) {}
                     new Thread(() -> {
                         try { performStreamingCompletion(request, state, listener); } catch (IOException ignore) {}
                     }).start();
@@ -323,22 +327,9 @@ public class QwenApiClient implements StreamingApiClient {
             } catch (Exception ignore) {}
         }
 
-        QwenResponseParser.parseResponseAsync(completedText, rawSse, new QwenResponseParser.ParseResultListener() {
-            @Override
-            public void onParseSuccess(QwenResponseParser.ParsedResponse parsedResponse) {
-                listener.onStreamCompleted(request.getRequestId(), parsedResponse);
-            }
-
-            @Override
-            public void onParseFailed() {
-                QwenResponseParser.ParsedResponse fallback = new QwenResponseParser.ParsedResponse();
-                fallback.action = "message";
-                fallback.explanation = completedText;
-                fallback.rawResponse = rawSse;
-                fallback.isValid = true;
-                listener.onStreamCompleted(request.getRequestId(), fallback);
-            }
-        });
+        QwenResponseParser parser = new QwenResponseParser();
+        com.codex.apk.ai.ParsedResponse parsedResponse = parser.parse(completedText);
+        listener.onStreamCompleted(request.getRequestId(), parsedResponse);
     }
 
     private void performToolContinuation(JsonArray toolCalls, MessageRequest originalRequest, QwenConversationState state, StreamListener listener) {
@@ -380,8 +371,9 @@ public class QwenApiClient implements StreamingApiClient {
     }
 
     private void continueStreamingWithToolResults(JsonObject requestBody, MessageRequest originalRequest, QwenConversationState state, StreamListener listener) throws IOException {
-        String qwenToken = midTokenManager.ensureMidToken(false);
-        okhttp3.Headers headers = QwenRequestFactory.buildQwenHeaders(qwenToken, state.getConversationId())
+        String qwenToken = midTokenManager.ensureTokens(false);
+        String identity = midTokenManager.getIdentity();
+        okhttp3.Headers headers = QwenRequestFactory.buildQwenHeaders(qwenToken, state.getConversationId(), identity)
                 .newBuilder().add("Accept", "text/event-stream").build();
 
         SseClient sse = new SseClient(httpClient);
@@ -414,8 +406,9 @@ public class QwenApiClient implements StreamingApiClient {
         body.addProperty("stream", false);
         body.addProperty("incremental_output", false);
 
-        String qwenToken = midTokenManager.ensureMidToken(false);
-        okhttp3.Headers headers = QwenRequestFactory.buildQwenHeaders(qwenToken, state.getConversationId())
+        String qwenToken = midTokenManager.ensureTokens(false);
+        String identity = midTokenManager.getIdentity();
+        okhttp3.Headers headers = QwenRequestFactory.buildQwenHeaders(qwenToken, state.getConversationId(), identity)
                 .newBuilder()
                 .set("Accept", "application/json")
                 .build();

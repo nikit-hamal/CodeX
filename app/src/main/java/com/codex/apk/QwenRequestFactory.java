@@ -8,13 +8,14 @@ import java.util.List;
 public class QwenRequestFactory {
     private static final String QWEN_BX_V = "2.5.31";
 
-    public static okhttp3.Headers buildQwenHeaders(String midtoken, String conversationId) {
+    public static okhttp3.Headers buildQwenHeaders(String midtoken, String conversationId, String identity) {
         okhttp3.Headers.Builder builder = new okhttp3.Headers.Builder()
                 .add("Authorization", "Bearer")
                 .add("Content-Type", "application/json")
                 .add("Accept", "*/*")
                 .add("bx-umidtoken", midtoken)
                 .add("bx-v", QWEN_BX_V)
+                .add("x-qwen-user-identity", identity != null ? identity : "")
                 .add("Accept-Language", "en-US,en;q=0.9")
                 .add("Connection", "keep-alive")
                 .add("Origin", "https://chat.qwen.ai")

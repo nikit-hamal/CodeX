@@ -69,7 +69,7 @@ The architecture does not enforce MVVM; responsibilities bleed between UI and ma
 - **Entry**: User submits prompt through `AIChatFragment` (`AIChatFragment.java`).
 - **Routing**: `AIAssistant.sendMessage()` chooses `ApiClient` using `AIModel.getProvider()`.
 - **Network**: Providers stream via `SseClient.postStreamWithRetry()` (see `QwenApiClient.java` and `QwenStreamProcessor.java`).
-- **Parsing**: `QwenResponseParser` extracts actions, plans, tool suggestions. Other clients perform inline JSON parsing with Gson.
+- **Parsing**: A provider-specific `ResponseParser` is used to extract actions, plans, and tool suggestions. `QwenResponseParser` handles the Qwen-specific format, while `GenericResponseParser` handles a more general format for other providers.
 - **UI Update**: `AiAssistantManager` posts updates to `ChatMessageAdapter`, toggling plan cards, file diffs, and tool usage.
 - **Tool Execution**: `ToolExecutor` orchestrates file modifications, calling helpers in `FileOps` and diff utilities (`DiffGenerator`, `DiffUtils`).
 
@@ -194,7 +194,7 @@ Heavy adapters (notably `ChatMessageAdapter`) contain extensive binding logic (>
 - Abstract duplicated OkHttp setup across API clients.
 
 ## Troubleshooting Guide
-- **Missing AI Responses**: Verify credentials in `SettingsActivity`. For Qwen, ensure `QwenMidTokenManager.ensureMidToken()` succeeds (check logcat for `QwenMidTokenManager`).
+- **Missing AI Responses**: Verify credentials in `SettingsActivity`. For Qwen, ensure `QwenMidTokenManager.ensureTokens()` succeeds (check logcat for `QwenMidTokenManager`). If you encounter a "RateLimited" error, the app will automatically attempt to refresh the session by fetching a new `midtoken` and `identity`.
 - **File Actions Not Applying**: Confirm `ToolExecutor` has storage permissions. `PermissionManager` handles runtime prompts; watch for denial in logs.
 - **Crash on Launch**: Inspect `DebugActivity` output. Common cause: missing theme resource referenced in `AndroidManifest.xml`.
 - **Markdown Rendering Issues**: Check `MarkdownFormatter.getInstance()` initialization; ensure Markwon dependencies are synced.

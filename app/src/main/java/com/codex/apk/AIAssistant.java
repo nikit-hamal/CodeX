@@ -1,18 +1,21 @@
 package com.codex.apk;
 
 import android.content.Context;
+import com.codex.apk.ai.AIModel;
+import com.codex.apk.ai.AIProvider;
+import com.codex.apk.ai.GenericResponseParser;
+import com.codex.apk.ai.ResponseParser;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import com.codex.apk.ai.AIModel;
-import com.codex.apk.ai.AIProvider;
 
 public class AIAssistant {
 
     private Map<AIProvider, ApiClient> apiClients = new HashMap<>();
+    private Map<AIProvider, ResponseParser> responseParsers = new HashMap<>();
     private AIModel currentModel;
     private boolean thinkingModeEnabled = false;
     private boolean webSearchEnabled = false;
@@ -50,6 +53,15 @@ public class AIAssistant {
         apiClients.put(AIProvider.OIVSCodeSer0501, new OIVSCodeSer0501ApiClient(context, actionListener));
         apiClients.put(AIProvider.WEWORDLE, new WeWordleApiClient(context, actionListener));
         apiClients.put(AIProvider.OPENROUTER, new OpenRouterApiClient(context, actionListener));
+
+        responseParsers.put(AIProvider.ALIBABA, new QwenResponseParser());
+        responseParsers.put(AIProvider.DEEPINFRA, new GenericResponseParser());
+        responseParsers.put(AIProvider.FREE, new GenericResponseParser());
+        responseParsers.put(AIProvider.COOKIES, new GenericResponseParser());
+        responseParsers.put(AIProvider.GOOGLE, new GenericResponseParser());
+        responseParsers.put(AIProvider.OIVSCodeSer0501, new GenericResponseParser());
+        responseParsers.put(AIProvider.WEWORDLE, new GenericResponseParser());
+        responseParsers.put(AIProvider.OPENROUTER, new GenericResponseParser());
     }
 
     public void sendPrompt(String userPrompt, List<ChatMessage> chatHistory, QwenConversationState qwenState, String fileName, String fileContent) {
@@ -127,12 +139,7 @@ public class AIAssistant {
     }
 
     public interface AIActionListener {
-        void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions,
-                                 List<ChatMessage.FileActionDetail> proposedFileChanges, String aiModelDisplayName);
-        void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions,
-                                 List<ChatMessage.FileActionDetail> proposedFileChanges,
-                                 List<ChatMessage.PlanStep> planSteps,
-                                 String aiModelDisplayName);
+        void onAiActionsProcessed(com.codex.apk.ai.ParsedResponse response, String aiModelDisplayName);
         void onAiError(String errorMessage);
         void onAiRequestStarted();
         void onAiStreamUpdate(String partialResponse, boolean isThinking);
