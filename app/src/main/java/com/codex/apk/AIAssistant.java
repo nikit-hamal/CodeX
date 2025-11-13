@@ -167,4 +167,11 @@ public class AIAssistant {
         }
     }
     public void shutdown() {}
+
+    public ResponseParser getResponseParser(AIModel model) {
+        if (model != null && responseParsers.containsKey(model.getFamily())) {
+            return responseParsers.get(model.getFamily());
+        }
+        return responseParsers.get("generic");
+    }
 }

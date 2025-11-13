@@ -3,6 +3,7 @@ package com.codex.apk;
 import android.util.Log;
 import com.codex.apk.ai.AIModel;
 import com.codex.apk.ai.WebSource;
+import com.codex.apk.ai.ResponseParser;
 import com.codex.apk.ChatMessage;
 import com.codex.apk.ToolExecutor;
 import com.codex.apk.editor.AiAssistantManager;
@@ -250,11 +251,14 @@ public class QwenStreamProcessor {
         }
 
         if (jsonToParse != null) {
-            ResponseParser parser = AIAssistant.getResponseParser(model);
-            com.codex.apk.ai.ParsedResponse parsed = parser.parse(jsonToParse);
-            if (parsed != null && parsed.isValid) {
-                actionListener.onAiActionsProcessed(parsed, model.getDisplayName());
-                return;
+            if (actionListener instanceof AiAssistantManager) {
+                AIAssistant assistant = ((AiAssistantManager) actionListener).getAiAssistant();
+                ResponseParser parser = assistant.getResponseParser(model);
+                com.codex.apk.ai.ParsedResponse parsed = parser.parse(jsonToParse);
+                if (parsed != null && parsed.isValid) {
+                    actionListener.onAiActionsProcessed(parsed, model.getDisplayName());
+                    return;
+                }
             }
         }
 

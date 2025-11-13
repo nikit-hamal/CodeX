@@ -21,6 +21,19 @@ public class QwenResponseParser implements ResponseParser {
             com.codex.apk.ai.ParsedResponse parsed = new com.codex.apk.ai.ParsedResponse();
             parsed.rawResponse = json;
 
+            // Single file operation
+            if (jsonObj.has("action") && jsonObj.get("action").isJsonPrimitive()) {
+                JsonObject singleOpWrapper = new JsonObject();
+                JsonArray opsArray = new JsonArray();
+                opsArray.add(jsonObj);
+                singleOpWrapper.add("operations", opsArray);
+
+                parsed.fileChanges = toFileActionDetails(parseFileOperationResponse(singleOpWrapper));
+                parsed.action = "file_operation";
+                parsed.isValid = true;
+                return parsed;
+            }
+
             // Plan response
             if (jsonObj.has("steps") && jsonObj.get("steps").isJsonArray()) {
                 parsed.planSteps = new ArrayList<>();

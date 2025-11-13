@@ -194,7 +194,7 @@ Heavy adapters (notably `ChatMessageAdapter`) contain extensive binding logic (>
 - Abstract duplicated OkHttp setup across API clients.
 
 ## Troubleshooting Guide
-- **Missing AI Responses**: Verify credentials in `SettingsActivity`. For Qwen, ensure `QwenMidTokenManager.ensureTokens()` succeeds (check logcat for `QwenMidTokenManager`). If you encounter a "RateLimited" error, the app will automatically attempt to refresh the session by fetching a new `midtoken` and `identity`.
+- **Missing AI Responses**: Verify credentials in `SettingsActivity`. For Qwen, ensure `QwenMidTokenManager.ensureMidToken()` succeeds (check logcat for `QwenMidTokenManager`). If you encounter a "RateLimited" error, the app will automatically attempt to refresh the session by fetching a new `midtoken` and `identity`.
 - **File Actions Not Applying**: Confirm `ToolExecutor` has storage permissions. `PermissionManager` handles runtime prompts; watch for denial in logs.
 - **Crash on Launch**: Inspect `DebugActivity` output. Common cause: missing theme resource referenced in `AndroidManifest.xml`.
 - **Markdown Rendering Issues**: Check `MarkdownFormatter.getInstance()` initialization; ensure Markwon dependencies are synced.

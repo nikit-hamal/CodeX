@@ -104,7 +104,9 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
         this.lastToolUsages = new ArrayList<>(toolUsages);
     }
 
-    public AIAssistant getAIAssistant() { return aiAssistant; }
+    public AIAssistant getAiAssistant() {
+        return aiAssistant;
+    }
 
     public void onResume() {
         String updatedApiKey = SettingsActivity.getGeminiApiKey(activity);
@@ -342,7 +344,7 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
             // Fallback parsing if no actions/plan were found by the primary parser
             if ((effectiveProposedFileChanges == null || effectiveProposedFileChanges.isEmpty()) && !isPlan) {
                 try {
-                    com.codex.apk.ai.ResponseParser fallbackParser = AIAssistant.getResponseParser(aiAssistant.getCurrentModel());
+                    com.codex.apk.ai.ResponseParser fallbackParser = aiAssistant.getResponseParser(aiAssistant.getCurrentModel());
                     com.codex.apk.ai.ParsedResponse parsed = null;
                     if (response.rawResponse != null) {
                         String normalized = AiResponseUtils.extractJsonFromContent(response.rawResponse);

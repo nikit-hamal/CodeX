@@ -428,17 +428,7 @@ public class GeminiFreeApiClient implements StreamingApiClient {
                     finalResponse.explanation = finalParsed.text;
                     finalResponse.rawResponse = fullResponse.toString();
                     finalResponse.isValid = true;
-                    // Note: GeminiFreeApiClient doesn't use the structured listener, so a direct onStreamCompleted is hypothetical.
-                    // To align with the refactor, we would call the main actionListener here if this were a primary AI Assistant client.
-                    // Since it's a StreamingApiClient, the listener interface might need its own refactoring if we want full object passing.
-                    // For now, let's assume the listener can handle the text and we notify the main listener separately.
-                    if (actionListener != null) {
-                        actionListener.onAiActionsProcessed(finalResponse, request.getModel().getDisplayName());
-                        actionListener.onAiRequestCompleted();
-                    }
-                    // The StreamListener interface is more basic, let's just send the text for now to satisfy its contract.
                     listener.onStreamCompleted(request.getRequestId(), finalResponse);
-
 
                 } finally {
                     activeStreams.remove(request.getRequestId());
