@@ -34,7 +34,13 @@ public class SseClient {
 
     public SseClient(OkHttpClient base) {
         // Derive a client with longer read timeout for streaming.
-        this.http = base.newBuilder().readTimeout(0, TimeUnit.SECONDS).build();
+        this.http = base.newBuilder()
+                .readTimeout(0, TimeUnit.SECONDS)
+                .hostnameVerifier((hostname, session) -> {
+                    // Use the default Android hostname verifier.
+                    return javax.net.ssl.HttpsURLConnection.getDefaultHostnameVerifier().verify(hostname, session);
+                })
+                .build();
     }
 
     public void cancel() {
