@@ -19,7 +19,6 @@ import com.codex.apk.ToolSpec;
 import com.codex.apk.SettingsActivity;
 import com.codex.apk.TabItem;
 import com.codex.apk.DiffGenerator;
-import com.codex.apk.QwenResponseParser;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
@@ -307,29 +306,7 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
 
     // --- Implement AIAssistant.AIActionListener methods ---
     @Override
-    public void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions, List<ChatMessage.FileActionDetail> proposedFileChanges, String aiModelDisplayName) {
-        onAiActionsProcessedInternal(rawAiResponseJson, explanation, suggestions, proposedFileChanges, new ArrayList<>(), aiModelDisplayName, null, null);
-    }
-
-    @Override
-    public void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions, List<ChatMessage.FileActionDetail> proposedFileChanges, List<ChatMessage.PlanStep> planSteps, String aiModelDisplayName) {
-        onAiActionsProcessedInternal(rawAiResponseJson, explanation, suggestions, proposedFileChanges, planSteps, aiModelDisplayName, null, null);
-    }
-
-    public void onAiActionsProcessed(String rawAiResponseJson, String explanation,
-                                   List<String> suggestions,
-                                   List<ChatMessage.FileActionDetail> proposedFileChanges, String aiModelDisplayName,
-                                   String thinkingContent, List<WebSource> webSources) {
-        // This method now delegates to the new internal method, creating an empty plan list.
-        onAiActionsProcessedInternal(rawAiResponseJson, explanation, suggestions, proposedFileChanges, new ArrayList<>(), aiModelDisplayName, thinkingContent, webSources);
-    }
-
-    private void onAiActionsProcessedInternal(String rawAiResponseJson, String explanation,
-                                              List<String> suggestions,
-                                              List<ChatMessage.FileActionDetail> proposedFileChanges,
-                                              List<ChatMessage.PlanStep> planSteps,
-                                              String aiModelDisplayName,
-                                              String thinkingContent, List<WebSource> webSources) {
+    public void onAiActionsProcessed(com.codex.apk.ai.ParsedResponse response, String aiModelDisplayName) {
         activity.runOnUiThread(() -> {
             AIChatFragment uiFrag = activity.getAiChatFragment();
             if (uiFrag == null) {
@@ -345,12 +322,12 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
             }
 
             // Centralized tool call handling
-            String jsonToParseForTools = AiResponseUtils.extractJsonBlock(explanation, rawAiResponseJson);
+            String jsonToParseForTools = AiResponseUtils.extractJsonBlock(response.explanation, response.rawResponse);
             JsonArray toolCalls = AiResponseUtils.extractToolCalls(jsonToParseForTools);
 
             if (toolCalls != null) {
                 try {
-                    currentToolsMessagePosition = toolCoordinator.displayRunningTools(uiFrag, aiModelDisplayName, rawAiResponseJson, toolCalls);
+                    currentToolsMessagePosition = toolCoordinator.displayRunningTools(uiFrag, aiModelDisplayName, response.rawResponse, toolCalls);
                     toolCoordinator.executeTools(toolCalls, activity.getProjectDirectory(), currentToolsMessagePosition, uiFrag);
                     lastToolUsages = toolCoordinator.getLastToolUsages();
                     return;
@@ -359,28 +336,34 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
                 }
             }
 
-            List<ChatMessage.FileActionDetail> effectiveProposedFileChanges = proposedFileChanges;
-            boolean isPlan = planSteps != null && !planSteps.isEmpty();
+            List<ChatMessage.FileActionDetail> effectiveProposedFileChanges = response.fileChanges;
+            boolean isPlan = response.planSteps != null && !response.planSteps.isEmpty();
 
+            // Fallback parsing if no actions/plan were found by the primary parser
             if ((effectiveProposedFileChanges == null || effectiveProposedFileChanges.isEmpty()) && !isPlan) {
                 try {
-                    QwenResponseParser.ParsedResponse parsed = null;
-                    if (rawAiResponseJson != null) {
-                        String normalized = AiResponseUtils.extractJsonFromContent(rawAiResponseJson);
-                        String toParse = normalized != null ? normalized : rawAiResponseJson;
-                        if (toParse != null) parsed = QwenResponseParser.parseResponse(toParse);
+                    com.codex.apk.ai.ResponseParser fallbackParser = AIAssistant.getResponseParser(aiAssistant.getCurrentModel());
+                    com.codex.apk.ai.ParsedResponse parsed = null;
+                    if (response.rawResponse != null) {
+                        String normalized = AiResponseUtils.extractJsonFromContent(response.rawResponse);
+                        if (normalized != null) parsed = fallbackParser.parse(normalized);
                     }
-                    if (parsed == null && explanation != null && !explanation.isEmpty()) {
-                        String exNorm = AiResponseUtils.extractJsonFromContent(explanation);
-                        if (exNorm != null) parsed = QwenResponseParser.parseResponse(exNorm);
+                    if ((parsed == null || !parsed.isValid) && response.explanation != null) {
+                        String exNorm = AiResponseUtils.extractJsonFromContent(response.explanation);
+                        if (exNorm != null) parsed = fallbackParser.parse(exNorm);
                     }
-                    if (parsed != null && parsed.action != null && parsed.action.contains("file")) {
-                        effectiveProposedFileChanges = QwenResponseParser.toFileActionDetails(parsed);
+
+                    if (parsed != null && parsed.isValid) {
+                        effectiveProposedFileChanges = parsed.fileChanges;
+                        if (response.planSteps == null || response.planSteps.isEmpty()) {
+                            response.planSteps = parsed.planSteps; // Adopt plan from fallback if needed
+                        }
                     }
                 } catch (Exception e) {
                     Log.w(TAG, "Fallback file op parse failed", e);
                 }
             }
+
 
             boolean hasOps = effectiveProposedFileChanges != null && !effectiveProposedFileChanges.isEmpty();
             if (isPlan && hasOps) {
@@ -389,24 +372,23 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
             }
 
             if (isCurrentlyExecutingPlan) {
-                planExecutor.onStepExecutionResult(effectiveProposedFileChanges, rawAiResponseJson, explanation);
+                planExecutor.onStepExecutionResult(effectiveProposedFileChanges, response.rawResponse, response.explanation);
                 return;
             }
 
             ChatMessage aiMessage = responseRenderer.buildAssistantMessage(
-                    explanation,
-                    suggestions,
+                    response.explanation,
+                    response.suggestions,
                     aiModelDisplayName,
-                    rawAiResponseJson,
+                    response.rawResponse,
                     effectiveProposedFileChanges,
-                    planSteps,
-                    thinkingContent,
-                    webSources,
+                    response.planSteps,
+                    null, // thinkingContent is handled by streaming
+                    null, // webSources are not part of this flow
                     lastToolUsages
             );
 
             Integer targetPos = currentStreamingMessagePosition;
-            // Prefer to replace a transient tools message if present to avoid duplicates
             Integer replacePos = currentToolsMessagePosition != null ? currentToolsMessagePosition : targetPos;
             if (replacePos != null && uiFrag.getMessageAt(replacePos) != null) {
                 uiFrag.updateMessage(replacePos, aiMessage);
@@ -421,7 +403,6 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
                     onAiAcceptActions(insertedPos, aiMessage);
                 }
             }
-            // Clear after attaching/replacing to prevent duplicate display in future messages
             lastToolUsages = null;
         });
     }
@@ -531,17 +512,8 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
     }
 
     @Override
-    public void onStreamCompleted(String requestId, com.codex.apk.QwenResponseParser.ParsedResponse response) {
-        onAiActionsProcessedInternal(
-            response.rawResponse,
-            response.explanation,
-            new ArrayList<>(),
-            com.codex.apk.QwenResponseParser.toFileActionDetails(response),
-            com.codex.apk.QwenResponseParser.toPlanSteps(response),
-            aiAssistant.getCurrentModel().getDisplayName(),
-            null,
-            null
-        );
+    public void onStreamCompleted(String requestId, com.codex.apk.ai.ParsedResponse response) {
+        onAiActionsProcessed(response, aiAssistant.getCurrentModel().getDisplayName());
         onAiRequestCompleted();
     }
 

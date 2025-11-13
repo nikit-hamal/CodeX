@@ -355,45 +355,6 @@ public class GeminiFreeApiClient implements StreamingApiClient {
         return null;
     }
 
-    private void notifyAiActionsProcessed(String rawAiResponseJson,
-                                          String explanation,
-                                          List<String> suggestions,
-                                          List<ChatMessage.FileActionDetail> fileActions,
-                                          String modelDisplayName,
-                                          String thinking,
-                                          List<com.codex.apk.ai.WebSource> sources) {
-
-        String jsonToParse = JsonUtils.extractJsonFromCodeBlock(explanation);
-        if (jsonToParse == null && JsonUtils.looksLikeJson(explanation)) {
-            jsonToParse = explanation;
-        }
-
-        if (jsonToParse != null) {
-            try {
-                QwenResponseParser.ParsedResponse parsed = QwenResponseParser.parseResponse(jsonToParse);
-                if (parsed != null && parsed.isValid) {
-                    if ("plan".equals(parsed.action) && parsed.planSteps != null && !parsed.planSteps.isEmpty()) {
-                        List<ChatMessage.PlanStep> planSteps = QwenResponseParser.toPlanSteps(parsed);
-                        actionListener.onAiActionsProcessed(rawAiResponseJson, parsed.explanation, suggestions, new ArrayList<>(), planSteps, modelDisplayName);
-                        return;
-                    } else {
-                        fileActions = QwenResponseParser.toFileActionDetails(parsed);
-                        explanation = parsed.explanation;
-                    }
-                }
-            } catch (Exception e) {
-                // Fallback to default behavior
-            }
-        }
-
-        if (actionListener instanceof com.codex.apk.editor.AiAssistantManager) {
-            ((com.codex.apk.editor.AiAssistantManager) actionListener).onAiActionsProcessed(rawAiResponseJson, explanation, suggestions, fileActions, modelDisplayName, thinking, sources);
-        } else {
-            String fallback = ResponseUtils.buildExplanationWithThinking(explanation, thinking);
-            actionListener.onAiActionsProcessed(rawAiResponseJson, fallback, suggestions, fileActions, modelDisplayName);
-        }
-    }
-
     private static class ParsedOutput {
         final String text;
         final String thoughts;
@@ -462,12 +423,22 @@ public class GeminiFreeApiClient implements StreamingApiClient {
                     }
 
                     ParsedOutput finalParsed = parseOutputFromStream(fullResponse.toString());
-                    QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
+                    com.codex.apk.ai.ParsedResponse finalResponse = new com.codex.apk.ai.ParsedResponse();
                     finalResponse.action = "message";
                     finalResponse.explanation = finalParsed.text;
                     finalResponse.rawResponse = fullResponse.toString();
                     finalResponse.isValid = true;
+                    // Note: GeminiFreeApiClient doesn't use the structured listener, so a direct onStreamCompleted is hypothetical.
+                    // To align with the refactor, we would call the main actionListener here if this were a primary AI Assistant client.
+                    // Since it's a StreamingApiClient, the listener interface might need its own refactoring if we want full object passing.
+                    // For now, let's assume the listener can handle the text and we notify the main listener separately.
+                    if (actionListener != null) {
+                        actionListener.onAiActionsProcessed(finalResponse, request.getModel().getDisplayName());
+                        actionListener.onAiRequestCompleted();
+                    }
+                    // The StreamListener interface is more basic, let's just send the text for now to satisfy its contract.
                     listener.onStreamCompleted(request.getRequestId(), finalResponse);
+
 
                 } finally {
                     activeStreams.remove(request.getRequestId());

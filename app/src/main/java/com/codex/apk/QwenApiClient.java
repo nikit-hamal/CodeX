@@ -33,11 +33,13 @@ public class QwenApiClient implements StreamingApiClient {
     private final QwenConversationManager conversationManager;
     private final QwenMidTokenManager midTokenManager;
     private final File projectDir;
+    private final AIAssistant aiAssistant;
     private final Map<String, SseClient> activeStreams = new HashMap<>();
 
-    public QwenApiClient(Context context, AIAssistant.AIActionListener actionListener, File projectDir) {
+    public QwenApiClient(Context context, AIAssistant.AIActionListener actionListener, File projectDir, AIAssistant aiAssistant) {
         this.actionListener = actionListener;
         this.projectDir = projectDir;
+        this.aiAssistant = aiAssistant;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)
@@ -248,17 +250,20 @@ public class QwenApiClient implements StreamingApiClient {
                 rawSse.append("data: ").append(chunk.toString()).append('\n');
 
                 if (QwenStreamProcessor.isErrorChunk(chunk)) {
-                    if (!retriedJsonError[0]) {
-                        retriedJsonError[0] = true;
-                        aborted[0] = true;
-                        try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}
-                        new Thread(() -> {
-                            try { performStreamingCompletion(request, state, listener); } catch (IOException ignore) {}
-                        }).start();
-                        return;
-                    } else {
-                        listener.onStreamError(request.getRequestId(), "Qwen API Error after retry", null);
-                        return;
+                    String errorMessage = chunk.toString();
+                    if (errorMessage.contains("RateLimited")) {
+                        if (!retriedJsonError[0]) {
+                            retriedJsonError[0] = true;
+                            aborted[0] = true;
+                            try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}
+                            new Thread(() -> {
+                                try { performStreamingCompletion(request, state, listener); } catch (IOException ignore) {}
+                            }).start();
+                            return;
+                        } else {
+                            listener.onStreamError(request.getRequestId(), "Qwen API Error after retry", null);
+                            return;
+                        }
                     }
                 }
 
@@ -272,7 +277,7 @@ public class QwenApiClient implements StreamingApiClient {
 
             @Override
             public void onError(String message, int code) {
-                if ((code == 401 || code == 403 || code == 429) && !retriedHttpError[0]) {
+                if ((code == 401 || code == 403 || code == 429 || message.contains("RateLimited")) && !retriedHttpError[0]) {
                     retriedHttpError[0] = true;
                     aborted[0] = true;
                     try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}
@@ -323,22 +328,14 @@ public class QwenApiClient implements StreamingApiClient {
             } catch (Exception ignore) {}
         }
 
-        QwenResponseParser.parseResponseAsync(completedText, rawSse, new QwenResponseParser.ParseResultListener() {
-            @Override
-            public void onParseSuccess(QwenResponseParser.ParsedResponse parsedResponse) {
-                listener.onStreamCompleted(request.getRequestId(), parsedResponse);
-            }
-
-            @Override
-            public void onParseFailed() {
-                QwenResponseParser.ParsedResponse fallback = new QwenResponseParser.ParsedResponse();
-                fallback.action = "message";
-                fallback.explanation = completedText;
-                fallback.rawResponse = rawSse;
-                fallback.isValid = true;
-                listener.onStreamCompleted(request.getRequestId(), fallback);
-            }
-        });
+        com.codex.apk.ai.ResponseParser parser = aiAssistant.getResponseParser(request.getModel());
+        com.codex.apk.ai.ParsedResponse parsedResponse = parser.parse(completedText);
+        if (!parsedResponse.isValid) {
+            // Fallback for plain text
+            parsedResponse.explanation = completedText;
+            parsedResponse.isValid = true;
+        }
+        listener.onStreamCompleted(request.getRequestId(), parsedResponse);
     }
 
     private void performToolContinuation(JsonArray toolCalls, MessageRequest originalRequest, QwenConversationState state, StreamListener listener) {

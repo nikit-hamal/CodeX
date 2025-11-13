@@ -152,11 +152,8 @@ public class GeminiOfficialApiClient implements StreamingApiClient {
                         } catch(Exception ignore) {}
                     }
 
-                    QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                    finalResponse.action = "message";
-                    finalResponse.explanation = fullText.toString();
-                    finalResponse.rawResponse = rawResponse.toString();
-                    finalResponse.isValid = true;
+                    com.codex.apk.ai.GenericResponseParser parser = new com.codex.apk.ai.GenericResponseParser();
+                    com.codex.apk.ai.ParsedResponse finalResponse = parser.parse(fullText.toString());
                     listener.onStreamCompleted(request.getRequestId(), finalResponse);
 
                 } finally {

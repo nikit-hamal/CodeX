@@ -1,18 +1,21 @@
 package com.codex.apk;
 
 import android.content.Context;
+import com.codex.apk.ai.AIModel;
+import com.codex.apk.ai.AIProvider;
+import com.codex.apk.ai.GenericResponseParser;
+import com.codex.apk.ai.ResponseParser;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import com.codex.apk.ai.AIModel;
-import com.codex.apk.ai.AIProvider;
 
 public class AIAssistant {
 
     private Map<AIProvider, ApiClient> apiClients = new HashMap<>();
+    private Map<String, ResponseParser> responseParsers = new HashMap<>();
     private AIModel currentModel;
     private boolean thinkingModeEnabled = false;
     private boolean webSearchEnabled = false;
@@ -40,7 +43,7 @@ public class AIAssistant {
     }
 
     private void initializeApiClients(Context context, File projectDir) {
-        apiClients.put(AIProvider.ALIBABA, new QwenApiClient(context, actionListener, projectDir));
+        apiClients.put(AIProvider.ALIBABA, new QwenApiClient(context, actionListener, projectDir, this));
         apiClients.put(AIProvider.DEEPINFRA, new DeepInfraApiClient(context, actionListener));
         apiClients.put(AIProvider.FREE, new AnyProviderApiClient(context, actionListener));
         apiClients.put(AIProvider.COOKIES, new GeminiFreeApiClient(context, actionListener));
@@ -50,6 +53,10 @@ public class AIAssistant {
         apiClients.put(AIProvider.OIVSCodeSer0501, new OIVSCodeSer0501ApiClient(context, actionListener));
         apiClients.put(AIProvider.WEWORDLE, new WeWordleApiClient(context, actionListener));
         apiClients.put(AIProvider.OPENROUTER, new OpenRouterApiClient(context, actionListener));
+
+        responseParsers.put("qwen", new QwenResponseParser());
+        responseParsers.put("gemini", new GenericResponseParser());
+        responseParsers.put("generic", new GenericResponseParser());
     }
 
     public void sendPrompt(String userPrompt, List<ChatMessage> chatHistory, QwenConversationState qwenState, String fileName, String fileContent) {
@@ -68,6 +75,11 @@ public class AIAssistant {
     }
 
     public void sendMessageStreaming(String message, List<ChatMessage> chatHistory, QwenConversationState qwenState, List<File> attachments, String fileName, String fileContent) {
+        ResponseParser parser = responseParsers.get(currentModel.getFamily());
+        if (parser == null) {
+            parser = responseParsers.get("generic");
+        }
+
         ApiClient client = apiClients.get(currentModel.getProvider());
         if (client instanceof StreamingApiClient) {
              String finalMessage = message;
@@ -127,12 +139,7 @@ public class AIAssistant {
     }
 
     public interface AIActionListener {
-        void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions,
-                                 List<ChatMessage.FileActionDetail> proposedFileChanges, String aiModelDisplayName);
-        void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions,
-                                 List<ChatMessage.FileActionDetail> proposedFileChanges,
-                                 List<ChatMessage.PlanStep> planSteps,
-                                 String aiModelDisplayName);
+        void onAiActionsProcessed(com.codex.apk.ai.ParsedResponse response, String aiModelDisplayName);
         void onAiError(String errorMessage);
         void onAiRequestStarted();
         void onAiStreamUpdate(String partialResponse, boolean isThinking);

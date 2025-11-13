@@ -154,6 +154,7 @@ User Input → Fragment → Manager → Utility/API → Manager → Activity →
    ├── Raw response reception via streaming
    ├── SSE parsing and content extraction
    ├── JSON detection and structured parsing
+   ├── Provider-specific parsing using `ResponseParser` interface
    ├── Plan and file operation extraction
    └── UI update via callback interface
 ```
@@ -405,7 +406,7 @@ public AiAssistantManager aiAssistantManager;
 **Key Features**:
 - Stateful conversation handling
 - SSE streaming with retry logic
-- Mid-token refresh management
+- Mid-token and identity refresh management for rate-limiting
 - Plan and tool execution support
 
 #### GeminiFreeApiClient (Reverse-Engineered Implementation)

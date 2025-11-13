@@ -181,7 +181,7 @@ public class QwenStreamProcessor {
                                 String finalContent = answerContent.length() > 0 ? answerContent.toString() : thinkingContent.toString();
                                 // Defensive: some responses end with empty content but valid fenced JSON earlier
                                 String jsonToParse = extractJsonFromCodeBlock(finalContent);
-                                if (jsonToParse == null && QwenResponseParser.looksLikeJson(finalContent)) {
+                                if (jsonToParse == null && com.codex.apk.util.JsonUtils.looksLikeJson(finalContent)) {
                                     jsonToParse = finalContent;
                                 }
 
@@ -245,39 +245,28 @@ public class QwenStreamProcessor {
 
     private void notifyListener(String rawResponse, String finalContent, String thinkingContent, List<com.codex.apk.ai.WebSource> webSources) {
         String jsonToParse = extractJsonFromCodeBlock(finalContent);
-        if (jsonToParse == null && QwenResponseParser.looksLikeJson(finalContent)) {
+        if (jsonToParse == null && com.codex.apk.util.JsonUtils.looksLikeJson(finalContent)) {
             jsonToParse = finalContent;
         }
 
         if (jsonToParse != null) {
-            QwenResponseParser.parseResponseAsync(jsonToParse, rawResponse, new QwenResponseParser.ParseResultListener() {
-                @Override
-                public void onParseSuccess(QwenResponseParser.ParsedResponse parsed) {
-                    if (parsed != null && parsed.isValid) {
-                        if ("plan".equals(parsed.action)) {
-                            List<ChatMessage.PlanStep> planSteps = QwenResponseParser.toPlanSteps(parsed);
-                            actionListener.onAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), new ArrayList<>(), planSteps, model.getDisplayName());
-                        } else if (parsed.action != null && parsed.action.contains("file")) {
-                            List<ChatMessage.FileActionDetail> details = QwenResponseParser.toFileActionDetails(parsed);
-                            enrichFileActionDetails(details);
-                            notifyAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), details, thinkingContent, webSources);
-                        } else {
-                            notifyAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
-                        }
-                    } else {
-                        notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
-                    }
-                }
-
-                @Override
-                public void onParseFailed() {
-                    Log.e(TAG, "Failed to parse extracted JSON, treating as text.");
-                    notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
-                }
-            });
-        } else {
-            notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
+            ResponseParser parser = AIAssistant.getResponseParser(model);
+            com.codex.apk.ai.ParsedResponse parsed = parser.parse(jsonToParse);
+            if (parsed != null && parsed.isValid) {
+                actionListener.onAiActionsProcessed(parsed, model.getDisplayName());
+                return;
+            }
         }
+
+        // Fallback for non-JSON or invalid JSON responses
+        com.codex.apk.ai.ParsedResponse fallbackResponse = new com.codex.apk.ai.ParsedResponse();
+        fallbackResponse.isValid = true;
+        fallbackResponse.rawResponse = rawResponse;
+        fallbackResponse.explanation = com.codex.apk.util.ResponseUtils.buildExplanationWithThinking(finalContent, thinkingContent);
+        fallbackResponse.suggestions = new ArrayList<>();
+        fallbackResponse.fileChanges = new ArrayList<>();
+        fallbackResponse.planSteps = new ArrayList<>();
+        actionListener.onAiActionsProcessed(fallbackResponse, model.getDisplayName());
     }
 
     public String recoverContentFromRaw(String raw) {
@@ -421,20 +410,11 @@ public class QwenStreamProcessor {
         matcher = pattern.matcher(content);
         if (matcher.find()) {
             String extracted = matcher.group(1).trim();
-            if (QwenResponseParser.looksLikeJson(extracted)) {
+            if (com.codex.apk.util.JsonUtils.looksLikeJson(extracted)) {
                 return extracted;
             }
         }
         return null;
-    }
-
-    private void notifyAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions, List<ChatMessage.FileActionDetail> fileActions, String thinking, List<com.codex.apk.ai.WebSource> sources) {
-        if (actionListener instanceof com.codex.apk.editor.AiAssistantManager) {
-            ((com.codex.apk.editor.AiAssistantManager) actionListener).onAiActionsProcessed(rawAiResponseJson, explanation, suggestions, fileActions, model.getDisplayName(), thinking, sources);
-        } else {
-            String fallback = com.codex.apk.util.ResponseUtils.buildExplanationWithThinking(explanation, thinking);
-            actionListener.onAiActionsProcessed(rawAiResponseJson, fallback, suggestions, fileActions, model.getDisplayName());
-        }
     }
 
     public static boolean isErrorChunk(JsonObject chunk) {

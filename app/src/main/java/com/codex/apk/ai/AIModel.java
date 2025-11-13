@@ -91,6 +91,16 @@ public class AIModel {
     public boolean supportsVision() { return capabilities.supportsVision; }
     public boolean supportsFunctionCalling() { return true; }
 
+    public String getFamily() {
+        if (modelId.toLowerCase().contains("qwen")) {
+            return "qwen";
+        } else if (modelId.toLowerCase().contains("gemini")) {
+            return "gemini";
+        } else {
+            return "generic";
+        }
+    }
+
     public static void addCustomModel(AIModel model) {
         customModels.add(model);
         // Reflect immediately in in-memory map to show in UI without duplication
