@@ -165,32 +165,9 @@ public class GitManager {
         if (url == null || url.trim().isEmpty()) {
             return false;
         }
-
-        // Check for common Git URL patterns
-        String trimmedUrl = url.trim();
-        
-        // HTTPS URLs
-        if (trimmedUrl.startsWith("https://")) {
-            return trimmedUrl.contains("github.com") || 
-                   trimmedUrl.contains("gitlab.com") || 
-                   trimmedUrl.contains("bitbucket.org") ||
-                   trimmedUrl.endsWith(".git");
-        }
-        
-        // SSH URLs
-        if (trimmedUrl.startsWith("git@")) {
-            return trimmedUrl.contains("github.com") || 
-                   trimmedUrl.contains("gitlab.com") || 
-                   trimmedUrl.contains("bitbucket.org") ||
-                   trimmedUrl.endsWith(".git");
-        }
-        
-        // Git protocol URLs
-        if (trimmedUrl.startsWith("git://")) {
-            return trimmedUrl.endsWith(".git");
-        }
-
-        return false;
+        // A more inclusive regex for Git URLs
+        String regex = "^((git|ssh|http(s)?)|(git@[\\w\\.]+))(:(//)?)([\\w\\.@\\:/\\-~]+)(\\.git)(/)?$";
+        return url.trim().matches(regex);
     }
 
     public String extractProjectNameFromUrl(String repositoryUrl) {

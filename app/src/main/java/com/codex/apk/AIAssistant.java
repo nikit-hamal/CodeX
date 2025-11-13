@@ -106,13 +106,19 @@ public class AIAssistant {
                 List<AIModel> models = client.fetchModels();
                 if (models != null && !models.isEmpty()) {
                     AIModel.updateModelsForProvider(provider, models);
-                    callback.onRefreshComplete(true, "Models refreshed successfully for " + provider.name());
+                    if (callback != null) {
+                        callback.onRefreshComplete(true, "Models refreshed successfully for " + provider.name());
+                    }
                 } else {
-                    callback.onRefreshComplete(false, "Failed to refresh models for " + provider.name());
+                    if (callback != null) {
+                        callback.onRefreshComplete(false, "Failed to refresh models for " + provider.name());
+                    }
                 }
             }).start();
         } else {
-            callback.onRefreshComplete(false, "API client for provider " + provider.name() + " not found.");
+            if (callback != null) {
+                callback.onRefreshComplete(false, "API client for provider " + provider.name() + " not found.");
+            }
         }
     }
 

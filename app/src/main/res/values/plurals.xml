@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="delete_multiple_projects">
+        <item quantity="one">Delete %d selected project?</item>
+        <item quantity="other">Delete %d selected projects?</item>
+    </plurals>
+</resources>

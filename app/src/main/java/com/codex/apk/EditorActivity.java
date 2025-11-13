@@ -64,7 +64,7 @@ public class EditorActivity extends AppCompatActivity implements
     private ExecutorService executorService; // ExecutorService is a core utility, might stay here or be managed by a dedicated utility manager
 
     private EditorViewModel viewModel;
-    private List<File> pendingFilesToOpen = new ArrayList<>();
+    private final List<File> pendingFilesToOpen = new ArrayList<>();
     private String pendingDiffFileName;
     private String pendingDiffContent;
 
@@ -153,10 +153,12 @@ public class EditorActivity extends AppCompatActivity implements
         }
 
         // Process any pending files
-        for (File file : pendingFilesToOpen) {
-            tabManager.openFile(file);
+        synchronized (pendingFilesToOpen) {
+            for (File file : pendingFilesToOpen) {
+                tabManager.openFile(file);
+            }
+            pendingFilesToOpen.clear();
         }
-        pendingFilesToOpen.clear();
 
         // Process any pending diff
         if (pendingDiffFileName != null && pendingDiffContent != null) {
@@ -167,7 +169,9 @@ public class EditorActivity extends AppCompatActivity implements
     }
 
     public void addPendingFileToOpen(File file) {
-        pendingFilesToOpen.add(file);
+        synchronized (pendingFilesToOpen) {
+            pendingFilesToOpen.add(file);
+        }
     }
 
     public void addPendingDiffToOpen(String fileName, String diffContent) {
