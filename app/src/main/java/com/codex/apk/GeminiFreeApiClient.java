@@ -363,34 +363,13 @@ public class GeminiFreeApiClient implements StreamingApiClient {
                                           String thinking,
                                           List<com.codex.apk.ai.WebSource> sources) {
 
-        String jsonToParse = JsonUtils.extractJsonFromCodeBlock(explanation);
-        if (jsonToParse == null && JsonUtils.looksLikeJson(explanation)) {
-            jsonToParse = explanation;
-        }
-
-        if (jsonToParse != null) {
-            try {
-                QwenResponseParser.ParsedResponse parsed = QwenResponseParser.parseResponse(jsonToParse);
-                if (parsed != null && parsed.isValid) {
-                    if ("plan".equals(parsed.action) && parsed.planSteps != null && !parsed.planSteps.isEmpty()) {
-                        List<ChatMessage.PlanStep> planSteps = QwenResponseParser.toPlanSteps(parsed);
-                        actionListener.onAiActionsProcessed(rawAiResponseJson, parsed.explanation, suggestions, new ArrayList<>(), planSteps, modelDisplayName);
-                        return;
-                    } else {
-                        fileActions = QwenResponseParser.toFileActionDetails(parsed);
-                        explanation = parsed.explanation;
-                    }
-                }
-            } catch (Exception e) {
-                // Fallback to default behavior
-            }
-        }
+        com.codex.apk.ai.GenericResponseParser parser = new com.codex.apk.ai.GenericResponseParser();
+        com.codex.apk.ai.ParsedResponse parsed = parser.parse(explanation);
 
         if (actionListener instanceof com.codex.apk.editor.AiAssistantManager) {
-            ((com.codex.apk.editor.AiAssistantManager) actionListener).onAiActionsProcessed(rawAiResponseJson, explanation, suggestions, fileActions, modelDisplayName, thinking, sources);
+            ((com.codex.apk.editor.AiAssistantManager) actionListener).onAiActionsProcessed(parsed, modelDisplayName);
         } else {
-            String fallback = ResponseUtils.buildExplanationWithThinking(explanation, thinking);
-            actionListener.onAiActionsProcessed(rawAiResponseJson, fallback, suggestions, fileActions, modelDisplayName);
+            actionListener.onAiActionsProcessed(parsed, modelDisplayName);
         }
     }
 

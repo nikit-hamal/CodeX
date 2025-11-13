@@ -293,7 +293,7 @@ public class AIChatFragment extends Fragment implements ChatMessageAdapter.OnAiA
             if (!trimmedContent.equals(trimmedRaw)) {
                 continue;
             }
-            if (!com.codex.apk.QwenResponseParser.looksLikeJson(trimmedContent)) {
+            if (!com.codex.apk.util.JsonUtils.looksLikeJson(trimmedContent)) {
                 continue;
             }
             chatHistory.remove(i);

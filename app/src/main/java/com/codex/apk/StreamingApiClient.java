@@ -69,7 +69,7 @@ public interface StreamingApiClient extends ApiClient {
     interface StreamListener {
         void onStreamStarted(String requestId);
         void onStreamPartialUpdate(String requestId, String partialResponse, boolean isThinking);
-        void onStreamCompleted(String requestId, QwenResponseParser.ParsedResponse response);
+        void onStreamCompleted(String requestId, com.codex.apk.ai.ParsedResponse response);
         void onStreamError(String requestId, String errorMessage, Throwable throwable);
     }
 

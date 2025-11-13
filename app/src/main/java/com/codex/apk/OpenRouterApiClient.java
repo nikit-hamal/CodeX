@@ -158,11 +158,8 @@ public class OpenRouterApiClient implements StreamingApiClient {
                     }
                     @Override public void onComplete() {
                         activeStreams.remove(request.getRequestId());
-                        QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                        finalResponse.action = "message";
-                        finalResponse.explanation = finalText.toString();
-                        finalResponse.rawResponse = rawSse.toString();
-                        finalResponse.isValid = true;
+                        com.codex.apk.ai.GenericResponseParser parser = new com.codex.apk.ai.GenericResponseParser();
+                        com.codex.apk.ai.ParsedResponse finalResponse = parser.parse(finalText.toString());
                         listener.onStreamCompleted(request.getRequestId(), finalResponse);
                     }
                 });
