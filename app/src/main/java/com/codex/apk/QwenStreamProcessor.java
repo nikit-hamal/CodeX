@@ -438,7 +438,15 @@ public class QwenStreamProcessor {
     }
 
     public static boolean isErrorChunk(JsonObject chunk) {
-        // Simple check for now, can be expanded
+        if (chunk == null) return false;
+        if (chunk.has("success") && !chunk.get("success").getAsBoolean()) {
+            if (chunk.has("data") && chunk.get("data").isJsonObject()) {
+                JsonObject data = chunk.getAsJsonObject("data");
+                if (data.has("code") && "RateLimited".equals(data.get("code").getAsString())) {
+                    return true;
+                }
+            }
+        }
         return chunk.has("error");
     }
 

@@ -39,6 +39,7 @@ public class GeminiOfficialApiClient implements StreamingApiClient {
     // API key is optional at construction and can be set later.
     private volatile String apiKey;
     private final java.util.Map<String, okhttp3.Call> activeStreams = new java.util.HashMap<>();
+    private final AIAssistant assistant;
 
     public GeminiOfficialApiClient(Context context, AIAssistant.AIActionListener actionListener, String apiKey) {
         this.context = context.getApplicationContext();
@@ -49,6 +50,7 @@ public class GeminiOfficialApiClient implements StreamingApiClient {
                 .readTimeout(180, TimeUnit.SECONDS)
                 .writeTimeout(120, TimeUnit.SECONDS)
                 .build();
+        this.assistant = new AIAssistant(context, null, actionListener);
     }
 
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
@@ -152,12 +154,14 @@ public class GeminiOfficialApiClient implements StreamingApiClient {
                         } catch(Exception ignore) {}
                     }
 
-                    QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                    finalResponse.action = "message";
-                    finalResponse.explanation = fullText.toString();
-                    finalResponse.rawResponse = rawResponse.toString();
-                    finalResponse.isValid = true;
-                    listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                    com.codex.apk.ai.ResponseParser parser = assistant.getResponseParser(request.getModel());
+                    QwenResponseParser.ParsedResponse finalResponse = parser.parse(fullText.toString());
+                    if (finalResponse != null) {
+                        finalResponse.rawResponse = rawResponse.toString();
+                        listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                    } else {
+                        listener.onStreamError(request.getRequestId(), "Failed to parse response", null);
+                    }
 
                 } finally {
                     activeStreams.remove(request.getRequestId());

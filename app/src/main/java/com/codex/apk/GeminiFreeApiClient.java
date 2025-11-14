@@ -51,6 +51,7 @@ public class GeminiFreeApiClient implements StreamingApiClient {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private volatile boolean refreshRunning = false;
     private final Map<String, okhttp3.Call> activeStreams = new HashMap<>();
+    private final AIAssistant assistant;
 
     public GeminiFreeApiClient(Context context, AIAssistant.AIActionListener actionListener) {
         this.context = context.getApplicationContext();
@@ -61,6 +62,7 @@ public class GeminiFreeApiClient implements StreamingApiClient {
                 .writeTimeout(120, TimeUnit.SECONDS)
                 .readTimeout(180, TimeUnit.SECONDS)
                 .build();
+        this.assistant = new AIAssistant(context, null, actionListener);
     }
 
 
@@ -462,12 +464,14 @@ public class GeminiFreeApiClient implements StreamingApiClient {
                     }
 
                     ParsedOutput finalParsed = parseOutputFromStream(fullResponse.toString());
-                    QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                    finalResponse.action = "message";
-                    finalResponse.explanation = finalParsed.text;
-                    finalResponse.rawResponse = fullResponse.toString();
-                    finalResponse.isValid = true;
-                    listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                    com.codex.apk.ai.ResponseParser parser = assistant.getResponseParser(request.getModel());
+                    QwenResponseParser.ParsedResponse finalResponse = parser.parse(finalParsed.text);
+                    if (finalResponse != null) {
+                        finalResponse.rawResponse = fullResponse.toString();
+                        listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                    } else {
+                        listener.onStreamError(request.getRequestId(), "Failed to parse response", null);
+                    }
 
                 } finally {
                     activeStreams.remove(request.getRequestId());

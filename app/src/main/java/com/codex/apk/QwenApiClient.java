@@ -251,9 +251,13 @@ public class QwenApiClient implements StreamingApiClient {
                     if (!retriedJsonError[0]) {
                         retriedJsonError[0] = true;
                         aborted[0] = true;
-                        try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}
                         new Thread(() -> {
-                            try { performStreamingCompletion(request, state, listener); } catch (IOException ignore) {}
+                            try {
+                                midTokenManager.ensureMidToken(true);
+                                performStreamingCompletion(request, state, listener);
+                            } catch (IOException e) {
+                                listener.onStreamError(request.getRequestId(), "Error retrying after rate limit: " + e.getMessage(), e);
+                            }
                         }).start();
                         return;
                     } else {
@@ -275,9 +279,13 @@ public class QwenApiClient implements StreamingApiClient {
                 if ((code == 401 || code == 403 || code == 429) && !retriedHttpError[0]) {
                     retriedHttpError[0] = true;
                     aborted[0] = true;
-                    try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}
                     new Thread(() -> {
-                        try { performStreamingCompletion(request, state, listener); } catch (IOException ignore) {}
+                        try {
+                            midTokenManager.ensureMidToken(true);
+                            performStreamingCompletion(request, state, listener);
+                        } catch (IOException e) {
+                            listener.onStreamError(request.getRequestId(), "Error retrying after HTTP error: " + e.getMessage(), e);
+                        }
                     }).start();
                     return;
                 }

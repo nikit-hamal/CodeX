@@ -45,6 +45,7 @@ public class DeepInfraApiClient implements StreamingApiClient {
     private OkHttpClient httpClient;
     private final Gson gson = new Gson();
     private final java.util.Map<String, SseClient> activeStreams = new java.util.HashMap<>();
+    private final AIAssistant assistant;
 
     public DeepInfraApiClient(Context context, AIAssistant.AIActionListener actionListener) {
         this.context = context.getApplicationContext();
@@ -54,6 +55,7 @@ public class DeepInfraApiClient implements StreamingApiClient {
                 .readTimeout(60, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
+        this.assistant = new AIAssistant(context, null, actionListener);
     }
 
 
@@ -182,12 +184,14 @@ public class DeepInfraApiClient implements StreamingApiClient {
                     }
                     @Override public void onComplete() {
                         activeStreams.remove(request.getRequestId());
-                        QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                        finalResponse.action = "message";
-                        finalResponse.explanation = finalText.toString();
-                        finalResponse.rawResponse = rawSse.toString();
-                        finalResponse.isValid = true;
-                        listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                        com.codex.apk.ai.ResponseParser parser = assistant.getResponseParser(request.getModel());
+                        QwenResponseParser.ParsedResponse finalResponse = parser.parse(finalText.toString());
+                        if (finalResponse != null) {
+                            finalResponse.rawResponse = rawSse.toString();
+                            listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                        } else {
+                            listener.onStreamError(request.getRequestId(), "Failed to parse response", null);
+                        }
                     }
                 });
 

@@ -49,6 +49,7 @@ public class AnyProviderApiClient implements StreamingApiClient {
     protected final Gson gson = new Gson();
     protected final Random random = new Random();
     protected final java.util.Map<String, SseClient> activeStreams = new java.util.HashMap<>();
+    private final AIAssistant assistant;
 
     public AnyProviderApiClient(Context context, AIAssistant.AIActionListener actionListener) {
         this.context = context.getApplicationContext();
@@ -58,6 +59,7 @@ public class AnyProviderApiClient implements StreamingApiClient {
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(0, TimeUnit.SECONDS) // stream
                 .build();
+        this.assistant = new AIAssistant(context, null, actionListener);
     }
 
 
@@ -160,12 +162,14 @@ public class AnyProviderApiClient implements StreamingApiClient {
                     }
                     @Override public void onComplete() {
                         activeStreams.remove(request.getRequestId());
-                        QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                        finalResponse.action = "message";
-                        finalResponse.explanation = finalText.toString();
-                        finalResponse.rawResponse = rawSse.toString();
-                        finalResponse.isValid = true;
-                        listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                        com.codex.apk.ai.ResponseParser parser = assistant.getResponseParser(request.getModel());
+                        QwenResponseParser.ParsedResponse finalResponse = parser.parse(finalText.toString());
+                        if (finalResponse != null) {
+                            finalResponse.rawResponse = rawSse.toString();
+                            listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                        } else {
+                            listener.onStreamError(request.getRequestId(), "Failed to parse response", null);
+                        }
                     }
                 });
 

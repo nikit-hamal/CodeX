@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import com.codex.apk.ai.AIModel;
 import com.codex.apk.ai.AIProvider;
+import com.codex.apk.ai.GenericResponseParser;
+import com.codex.apk.ai.ResponseParser;
 
 public class AIAssistant {
 
@@ -160,4 +162,11 @@ public class AIAssistant {
         }
     }
     public void shutdown() {}
+
+    public ResponseParser getResponseParser(AIModel model) {
+        if (model.getFamily() == AIProvider.ALIBABA) {
+            return new QwenResponseParser();
+        }
+        return new GenericResponseParser();
+    }
 }

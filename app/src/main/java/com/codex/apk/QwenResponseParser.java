@@ -1,29 +1,19 @@
 package com.codex.apk;
 
 import android.util.Log;
+import com.codex.apk.ai.ResponseParser;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import android.os.Handler;
-import android.os.Looper;
 
 /**
  * Parser for handling JSON responses from Qwen models, especially for file operations.
  */
-public class QwenResponseParser {
+public class QwenResponseParser implements ResponseParser {
     private static final String TAG = "QwenResponseParser";
-    private static final ExecutorService backgroundExecutor = Executors.newSingleThreadExecutor();
-    private static final Handler mainHandler = new Handler(Looper.getMainLooper());
-
-    public interface ParseResultListener {
-        void onParseSuccess(ParsedResponse response);
-        void onParseFailed();
-    }
 
     /**
      * Represents a parsed plan step
@@ -121,27 +111,11 @@ public class QwenResponseParser {
         }
     }
 
-    /**
-     * Attempts to parse a JSON response string into a structured response object.
-     * Returns null if the response is not valid JSON or doesn't match expected format.
-     */
-    public static void parseResponseAsync(String jsonToParse, String rawSse, ParseResultListener listener) {
-        backgroundExecutor.execute(() -> {
-            try {
-                ParsedResponse response = parseResponse(jsonToParse);
-                if (response != null) {
-                    response.rawResponse = rawSse;
-                    mainHandler.post(() -> listener.onParseSuccess(response));
-                } else {
-                    mainHandler.post(listener::onParseFailed);
-                }
-            } catch (Exception e) {
-                mainHandler.post(listener::onParseFailed);
-            }
-        });
-    }
-
-    public static ParsedResponse parseResponse(String responseText) {
+    @Override
+    public ParsedResponse parse(String responseText) {
+        if (responseText == null) {
+            return null;
+        }
         try {
             Log.d(TAG, "Parsing response: " + responseText.substring(0, Math.min(200, responseText.length())) + "...");
             JsonObject jsonObj = JsonParser.parseString(responseText).getAsJsonObject();
