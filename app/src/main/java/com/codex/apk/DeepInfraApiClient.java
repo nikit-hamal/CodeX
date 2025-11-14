@@ -26,8 +26,6 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
-import com.codex.apk.util.JsonUtils;
-import okio.BufferedSource;
 
 /**
  * DeepInfraApiClient
@@ -182,12 +180,12 @@ public class DeepInfraApiClient implements StreamingApiClient {
                     }
                     @Override public void onComplete() {
                         activeStreams.remove(request.getRequestId());
-                        QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                        finalResponse.action = "message";
-                        finalResponse.explanation = finalText.toString();
-                        finalResponse.rawResponse = rawSse.toString();
-                        finalResponse.isValid = true;
-                        listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                        AiResponseParseHelper.deliverParsedCompletion(
+                                request.getRequestId(),
+                                finalText.toString(),
+                                rawSse.toString(),
+                                listener
+                        );
                     }
                 });
 

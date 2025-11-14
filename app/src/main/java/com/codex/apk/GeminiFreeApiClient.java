@@ -462,12 +462,12 @@ public class GeminiFreeApiClient implements StreamingApiClient {
                     }
 
                     ParsedOutput finalParsed = parseOutputFromStream(fullResponse.toString());
-                    QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                    finalResponse.action = "message";
-                    finalResponse.explanation = finalParsed.text;
-                    finalResponse.rawResponse = fullResponse.toString();
-                    finalResponse.isValid = true;
-                    listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                    AiResponseParseHelper.deliverParsedCompletion(
+                            request.getRequestId(),
+                            finalParsed.text,
+                            fullResponse.toString(),
+                            listener
+                    );
 
                 } finally {
                     activeStreams.remove(request.getRequestId());

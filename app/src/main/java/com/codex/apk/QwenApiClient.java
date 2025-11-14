@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import okhttp3.Cookie;
@@ -215,7 +216,8 @@ public class QwenApiClient implements StreamingApiClient {
                 }
                 state.setConversationId(conversationId);
 
-                performStreamingCompletion(request, state, listener);
+                boolean[] rateLimitRetried = new boolean[]{false};
+                performStreamingCompletion(request, state, listener, rateLimitRetried);
 
             } catch (IOException e) {
                 listener.onStreamError(request.getRequestId(), "Error: " + e.getMessage(), e);
@@ -223,7 +225,7 @@ public class QwenApiClient implements StreamingApiClient {
         }).start();
     }
 
-    private void performStreamingCompletion(MessageRequest request, QwenConversationState state, StreamListener listener) throws IOException {
+    private void performStreamingCompletion(MessageRequest request, QwenConversationState state, StreamListener listener, boolean[] rateLimitRetried) throws IOException {
         JsonObject requestBody = QwenRequestFactory.buildCompletionRequestBody(state, request.getModel(), request.isThinkingModeEnabled(), request.isWebSearchEnabled(), request.getEnabledTools(), request.getMessage());
         String qwenToken = midTokenManager.ensureMidToken(false);
         okhttp3.Headers headers = QwenRequestFactory.buildQwenHeaders(qwenToken, state.getConversationId())
@@ -253,7 +255,7 @@ public class QwenApiClient implements StreamingApiClient {
                         aborted[0] = true;
                         try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}
                         new Thread(() -> {
-                            try { performStreamingCompletion(request, state, listener); } catch (IOException ignore) {}
+                            try { performStreamingCompletion(request, state, listener, rateLimitRetried); } catch (IOException ignore) {}
                         }).start();
                         return;
                     } else {
@@ -277,7 +279,7 @@ public class QwenApiClient implements StreamingApiClient {
                     aborted[0] = true;
                     try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}
                     new Thread(() -> {
-                        try { performStreamingCompletion(request, state, listener); } catch (IOException ignore) {}
+                        try { performStreamingCompletion(request, state, listener, rateLimitRetried); } catch (IOException ignore) {}
                     }).start();
                     return;
                 }
@@ -293,34 +295,125 @@ public class QwenApiClient implements StreamingApiClient {
                     new Thread(() -> {
                         try {
                             String fallbackText = performNonStreamingCompletion(request, state);
-                            processFinalText(fallbackText != null ? fallbackText : "", rawSse.toString(), listener, request, state);
+                            processFinalText(fallbackText != null ? fallbackText : "", rawSse.toString(), listener, request, state, rateLimitRetried);
                         } catch (IOException e) {
                             listener.onStreamError(request.getRequestId(), "Non-streaming fallback failed", e);
                         }
                     }).start();
                 } else {
-                    processFinalText(completedText, rawSse.toString(), listener, request, state);
+                    processFinalText(completedText, rawSse.toString(), listener, request, state, rateLimitRetried);
                 }
             }
         });
     }
 
-    private void processFinalText(String completedText, String rawSse, StreamListener listener, MessageRequest request, QwenConversationState state) {
-        String jsonToParse = com.codex.apk.util.JsonUtils.extractJsonFromCodeBlock(completedText);
-        if (jsonToParse == null && com.codex.apk.util.JsonUtils.looksLikeJson(completedText)) {
-            jsonToParse = completedText;
+    private boolean handleRateLimitIfNeeded(JsonObject parsedJson,
+                                            StreamListener listener,
+                                            MessageRequest request,
+                                            QwenConversationState state,
+                                            boolean[] rateLimitRetried) {
+        if (parsedJson == null) {
+            return false;
         }
 
-        if (jsonToParse != null) {
+        JsonObject data = parsedJson.has("data") && parsedJson.get("data").isJsonObject()
+                ? parsedJson.getAsJsonObject("data")
+                : null;
+
+        String code = data != null && data.has("code") ? data.get("code").getAsString() : "";
+        String details = data != null && data.has("details") ? data.get("details").getAsString() : "";
+
+        boolean rateLimited = (code != null && code.toLowerCase(Locale.ROOT).contains("limit"))
+                || (details != null && details.toLowerCase(Locale.ROOT).contains("limit"));
+
+        if (!rateLimited) {
+            return false;
+        }
+
+        if (!rateLimitRetried[0]) {
+            rateLimitRetried[0] = true;
             try {
-                JsonObject maybe = JsonParser.parseString(jsonToParse).getAsJsonObject();
-                if (maybe.has("action") && "tool_call".equalsIgnoreCase(maybe.get("action").getAsString()) && maybe.has("tool_calls")) {
-                    new Thread(() -> {
-                        performToolContinuation(maybe.getAsJsonArray("tool_calls"), request, state, listener);
-                    }).start();
-                    return;
+                AIModel model = request.getModel();
+                if (model == null) {
+                    listener.onStreamError(request.getRequestId(), "Cannot retry Qwen request without a model selection.", null);
+                    return true;
                 }
+
+                midTokenManager.ensureMidToken(true);
+                state.clear();
+                String newConversationId = conversationManager.createNewConversation(model, request.isWebSearchEnabled());
+                if (newConversationId == null || newConversationId.isEmpty()) {
+                    listener.onStreamError(request.getRequestId(), "Failed to establish new Qwen conversation after session refresh.", null);
+                    return true;
+                }
+                state.setConversationId(newConversationId);
+                state.setLastParentId(null);
+                if (actionListener != null) {
+                    actionListener.onQwenConversationStateUpdated(state);
+                }
+            } catch (IOException e) {
+                listener.onStreamError(request.getRequestId(), "Failed to refresh Qwen midtoken: " + e.getMessage(), e);
+                return true;
+            }
+
+            new Thread(() -> {
+                try {
+                    performStreamingCompletion(request, state, listener, rateLimitRetried);
+                } catch (IOException e) {
+                    listener.onStreamError(request.getRequestId(), "Retry after rate limit failed: " + e.getMessage(), e);
+                }
+            }).start();
+
+            return true;
+        }
+
+        String template = data != null && data.has("template")
+                ? data.get("template").getAsString()
+                : "You have reached the Qwen daily usage limit. Please retry later.";
+
+        if (data != null && data.has("num")) {
+            try {
+                template = template.replace("{{num}}", String.valueOf(data.get("num").getAsInt()));
             } catch (Exception ignore) {}
+        }
+
+        listener.onStreamError(request.getRequestId(), template, null);
+        return true;
+    }
+
+    private void processFinalText(String completedText, String rawSse, StreamListener listener, MessageRequest request, QwenConversationState state, boolean[] rateLimitRetried) {
+        String candidateJson = com.codex.apk.util.JsonUtils.extractJsonFromCodeBlock(completedText);
+        if (candidateJson == null && com.codex.apk.util.JsonUtils.looksLikeJson(completedText)) {
+            candidateJson = completedText;
+        }
+
+        JsonObject parsedJson = null;
+        if (candidateJson != null) {
+            try {
+                parsedJson = JsonParser.parseString(candidateJson).getAsJsonObject();
+            } catch (Exception ignore) {}
+        }
+
+        if (parsedJson == null && completedText != null) {
+            int start = completedText.indexOf("{\"success\"");
+            int end = completedText.lastIndexOf('}');
+            if (start >= 0 && end > start) {
+                try {
+                    parsedJson = JsonParser.parseString(completedText.substring(start, end + 1)).getAsJsonObject();
+                } catch (Exception ignore) {}
+            }
+        }
+
+        if (handleRateLimitIfNeeded(parsedJson, listener, request, state, rateLimitRetried)) {
+            return;
+        }
+
+        if (parsedJson != null && parsedJson.has("action")
+                && "tool_call".equalsIgnoreCase(parsedJson.get("action").getAsString())
+                && parsedJson.has("tool_calls")) {
+            JsonArray toolCalls = parsedJson.getAsJsonArray("tool_calls");
+            new Thread(() -> performToolContinuation(toolCalls, request, state, listener, rateLimitRetried)).start();
+            return;
         }
 
         QwenResponseParser.parseResponseAsync(completedText, rawSse, new QwenResponseParser.ParseResultListener() {
@@ -341,7 +434,7 @@ public class QwenApiClient implements StreamingApiClient {
         });
     }
 
-    private void performToolContinuation(JsonArray toolCalls, MessageRequest originalRequest, QwenConversationState state, StreamListener listener) {
+    private void performToolContinuation(JsonArray toolCalls, MessageRequest originalRequest, QwenConversationState state, StreamListener listener, boolean[] rateLimitRetried) {
         ParallelToolExecutor executor = new ParallelToolExecutor(projectDir);
         List<ChatMessage.ToolUsage> toolUsages = new ArrayList<>();
         for (int i = 0; i < toolCalls.size(); i++) {
@@ -371,7 +464,7 @@ public class QwenApiClient implements StreamingApiClient {
                 JsonObject requestBody = QwenRequestFactory.buildContinuationRequestBody(state, originalRequest.getModel(), continuation);
 
                 // Continue with the streaming logic here...
-                continueStreamingWithToolResults(requestBody, originalRequest, state, listener);
+                continueStreamingWithToolResults(requestBody, originalRequest, state, listener, rateLimitRetried);
 
             } catch (Exception e) {
                 listener.onStreamError(originalRequest.getRequestId(), "Failed to process tool results", e);
@@ -379,7 +472,7 @@ public class QwenApiClient implements StreamingApiClient {
         });
     }
 
-    private void continueStreamingWithToolResults(JsonObject requestBody, MessageRequest originalRequest, QwenConversationState state, StreamListener listener) throws IOException {
+    private void continueStreamingWithToolResults(JsonObject requestBody, MessageRequest originalRequest, QwenConversationState state, StreamListener listener, boolean[] rateLimitRetried) throws IOException {
         String qwenToken = midTokenManager.ensureMidToken(false);
         okhttp3.Headers headers = QwenRequestFactory.buildQwenHeaders(qwenToken, state.getConversationId())
                 .newBuilder().add("Accept", "text/event-stream").build();
@@ -404,7 +497,7 @@ public class QwenApiClient implements StreamingApiClient {
             }
             @Override public void onComplete() {
                 activeStreams.remove(originalRequest.getRequestId());
-                processFinalText(finalText.toString(), rawSse.toString(), listener, originalRequest, state);
+                processFinalText(finalText.toString(), rawSse.toString(), listener, originalRequest, state, rateLimitRetried);
             }
         });
     }

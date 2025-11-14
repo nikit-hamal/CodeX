@@ -83,12 +83,12 @@ public class OIVSCodeSer0501ApiClient extends AnyProviderApiClient {
                     }
                     @Override public void onComplete() {
                         activeStreams.remove(request.getRequestId());
-                        QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                        finalResponse.action = "message";
-                        finalResponse.explanation = finalText.toString();
-                        finalResponse.rawResponse = rawSse.toString();
-                        finalResponse.isValid = true;
-                        listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                        AiResponseParseHelper.deliverParsedCompletion(
+                                request.getRequestId(),
+                                finalText.toString(),
+                                rawSse.toString(),
+                                listener
+                        );
                     }
                 });
 

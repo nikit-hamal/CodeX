@@ -1,18 +1,13 @@
 package com.codex.apk;
 
 import android.content.Context;
-import android.util.Log;
-
 import com.codex.apk.ai.AIModel;
 import com.codex.apk.ai.AIProvider;
-import com.codex.apk.util.JsonUtils;
-import com.codex.apk.util.ResponseUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -152,12 +147,12 @@ public class GeminiOfficialApiClient implements StreamingApiClient {
                         } catch(Exception ignore) {}
                     }
 
-                    QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                    finalResponse.action = "message";
-                    finalResponse.explanation = fullText.toString();
-                    finalResponse.rawResponse = rawResponse.toString();
-                    finalResponse.isValid = true;
-                    listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                    AiResponseParseHelper.deliverParsedCompletion(
+                            request.getRequestId(),
+                            fullText.toString(),
+                            rawResponse.toString(),
+                            listener
+                    );
 
                 } finally {
                     activeStreams.remove(request.getRequestId());
