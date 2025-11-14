@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@android:color/white"
+    android:padding="12dp">
+
+    <!-- Header -->
+    <TextView
+        android:id="@+id/diff_file_path"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:textColor="@android:color/black"
+        android:paddingBottom="8dp"
+        android:text="Modified: example.html" />
+
+    <!-- SEARCH Block -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#FFE4E1"
+        android:padding="8dp"
+        android:layout_marginBottom="4dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="❌ SEARCH (will be removed)"
+            android:textStyle="bold"
+            android:textSize="12sp"
+            android:textColor="#D32F2F"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/diff_search_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:textColor="#5D4037"
+            android:text="[Search text will appear here]" />
+    </LinearLayout>
+
+    <!-- Arrow indicator -->
+    <ImageView
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="center"
+        android:src="@android:drawable/arrow_down_float"
+        android:tint="#666666"
+        android:layout_marginVertical="8dp" />
+
+    <!-- REPLACE Block -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#E8F5E9"
+        android:padding="8dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="✅ REPLACE (will be added)"
+            android:textStyle="bold"
+            android:textSize="12sp"
+            android:textColor="#388E3C"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/diff_replace_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:textColor="#1B5E20"
+            android:text="[Replace text will appear here]" />
+    </LinearLayout>
+
+    <!-- Statistics -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/diff_stats"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="11sp"
+            android:textColor="#666666"
+            android:text="Lines: +2 -1" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_view_full_diff"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:text="View Full"
+            android:textSize="11sp"
+            android:minHeight="0dp"
+            android:paddingHorizontal="8dp" />
+    </LinearLayout>
+</LinearLayout>
