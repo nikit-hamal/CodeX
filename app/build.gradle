@@ -111,6 +111,9 @@ dependencies {
 
 	// Enhanced file operations
 	implementation 'commons-io:commons-io:2.11.0'
+
+	// CodeView for syntax highlighting
+	implementation 'io.github.kbiakov:codeview-android:1.4.2'
 }
 
 configurations.all {

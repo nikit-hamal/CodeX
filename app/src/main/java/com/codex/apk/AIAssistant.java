@@ -42,11 +42,15 @@ public class AIAssistant {
         initializeApiClient(context, projectDir);
     }
 
-    private ToolExecutor getToolExecutor() {
+    public ToolExecutor getToolExecutor() {
         if (toolExecutor == null && projectDir != null) {
             toolExecutor = new ToolExecutor(context, projectDir.getAbsolutePath());
         }
         return toolExecutor;
+    }
+
+    public void setProjectDir(File projectDir) {
+        this.projectDir = projectDir;
     }
 
     private void initializeApiClient(Context context, File projectDir) {
@@ -75,7 +79,14 @@ public class AIAssistant {
                 private StringBuilder fullResponse = new StringBuilder();
 
                 @Override
-                public void onAiStreamUpdate(String partialResponse, boolean isThinking) {
+                public void onStreamStarted(String requestId) {
+                    if (actionListener != null) {
+                        actionListener.onAiRequestStarted();
+                    }
+                }
+
+                @Override
+                public void onStreamPartialUpdate(String requestId, String partialResponse, boolean isThinking) {
                     fullResponse.append(partialResponse);
                     if (actionListener != null) {
                         actionListener.onAiStreamUpdate(partialResponse, isThinking);
@@ -83,23 +94,17 @@ public class AIAssistant {
                 }
 
                 @Override
-                public void onAiRequestCompleted() {
+                public void onStreamCompleted(String requestId, String response) {
                     if (actionListener != null) {
                         actionListener.onAiRequestCompleted();
                     }
-                    processResponse(fullResponse.toString(), chatHistory, qwenState, attachments);
+                    processResponse(response, chatHistory, qwenState, attachments);
                 }
 
                 @Override
-                public void onAiError(String message) {
+                public void onStreamError(String requestId, String errorMessage, Throwable throwable) {
                     if(actionListener != null) {
-                        actionListener.onAiError(message);
-                    }
-                }
-                 @Override
-                public void onQwenConversationStateUpdated(QwenConversationState state) {
-                    if (actionListener != null) {
-                        actionListener.onQwenConversationStateUpdated(state);
+                        actionListener.onAiError(errorMessage);
                     }
                 }
             });
@@ -112,13 +117,15 @@ public class AIAssistant {
 
     private void processResponse(String response, List<ChatMessage> chatHistory, QwenConversationState qwenState, List<File> attachments) {
         List<StormyResponseParser.ToolCall> toolCalls = responseParser.parse(response);
+        ChatMessage assistantMessage = new ChatMessage("assistant", response);
+        assistantMessage.setRawAiResponseJson(response);
+        chatHistory.add(assistantMessage);
 
         if (toolCalls.isEmpty()) {
             // No tool calls, we are done with this iteration. The response is final.
             return;
         }
 
-        chatHistory.add(new ChatMessage("assistant", response));
 
         for (StormyResponseParser.ToolCall toolCall : toolCalls) {
             switch (toolCall.getName()) {
@@ -176,6 +183,7 @@ public class AIAssistant {
     public interface AIActionListener extends StreamingApiClient.StreamListener {
         void onAiError(String errorMessage);
         void onAiRequestStarted();
+        void onAiStreamUpdate(String partialResponse, boolean isThinking);
         void onAiRequestCompleted();
         void onQwenConversationStateUpdated(QwenConversationState state);
         void onToolCall(String toolName, Map<String, Object> args);
