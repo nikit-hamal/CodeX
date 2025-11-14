@@ -104,23 +104,23 @@ public class AIAssistant {
                 private StringBuilder fullResponse = new StringBuilder();
 
                 @Override
-                public void onStreamUpdate(String partialResponse, boolean isThinking) {
+                public void onStreamStarted(String requestId) {
+                    // Stream started
+                }
+
+                @Override
+                public void onStreamPartialUpdate(String requestId, String partialResponse, boolean isThinking) {
                     fullResponse.append(partialResponse);
                 }
 
                 @Override
-                public void onStreamComplete() {
+                public void onStreamCompleted(String requestId, QwenResponseParser.ParsedResponse response) {
                     callback.onSuccess(fullResponse.toString());
                 }
 
                 @Override
-                public void onStreamError(String error) {
-                    callback.onError(error);
-                }
-
-                @Override
-                public void onConversationStateUpdated(QwenConversationState state) {
-                    // Ignore for simple workflow
+                public void onStreamError(String requestId, String errorMessage, Throwable throwable) {
+                    callback.onError(errorMessage);
                 }
             });
         } else {
