@@ -306,39 +306,52 @@ public class QwenApiClient implements StreamingApiClient {
     }
 
     private void processFinalText(String completedText, String rawSse, StreamListener listener, MessageRequest request, QwenConversationState state) {
-        String jsonToParse = com.codex.apk.util.JsonUtils.extractJsonFromCodeBlock(completedText);
-        if (jsonToParse == null && com.codex.apk.util.JsonUtils.looksLikeJson(completedText)) {
-            jsonToParse = completedText;
-        }
+        // Use the corrected utility to extract JSON from markdown
+        String jsonToParse = com.codex.apk.editor.AiResponseUtils.extractJsonFromContent(completedText);
 
+        // If JSON is found, attempt to parse it for tool calls or standard responses
         if (jsonToParse != null) {
+            // Check for tool calls first
             try {
                 JsonObject maybe = JsonParser.parseString(jsonToParse).getAsJsonObject();
                 if (maybe.has("action") && "tool_call".equalsIgnoreCase(maybe.get("action").getAsString()) && maybe.has("tool_calls")) {
                     new Thread(() -> {
                         performToolContinuation(maybe.getAsJsonArray("tool_calls"), request, state, listener);
                     }).start();
-                    return;
+                    return; // Stop further processing
                 }
             } catch (Exception ignore) {}
+
+            // If not a tool call, parse as a standard response
+            QwenResponseParser.parseResponseAsync(jsonToParse, rawSse, new QwenResponseParser.ParseResultListener() {
+                @Override
+                public void onParseSuccess(QwenResponseParser.ParsedResponse parsedResponse) {
+                    // Ensure explanation isn't empty if the root was just a plan/op
+                    if (parsedResponse.explanation == null || parsedResponse.explanation.isEmpty()) {
+                        parsedResponse.explanation = completedText;
+                    }
+                    listener.onStreamCompleted(request.getRequestId(), parsedResponse);
+                }
+
+                @Override
+                public void onParseFailed() {
+                    // If parsing the extracted JSON fails, fall back to the original text
+                    createAndSendFallbackMessage(completedText, rawSse, listener, request);
+                }
+            });
+        } else {
+            // If no JSON block is found, treat the whole response as a plain text message
+            createAndSendFallbackMessage(completedText, rawSse, listener, request);
         }
+    }
 
-        QwenResponseParser.parseResponseAsync(completedText, rawSse, new QwenResponseParser.ParseResultListener() {
-            @Override
-            public void onParseSuccess(QwenResponseParser.ParsedResponse parsedResponse) {
-                listener.onStreamCompleted(request.getRequestId(), parsedResponse);
-            }
-
-            @Override
-            public void onParseFailed() {
-                QwenResponseParser.ParsedResponse fallback = new QwenResponseParser.ParsedResponse();
-                fallback.action = "message";
-                fallback.explanation = completedText;
-                fallback.rawResponse = rawSse;
-                fallback.isValid = true;
-                listener.onStreamCompleted(request.getRequestId(), fallback);
-            }
-        });
+    private void createAndSendFallbackMessage(String text, String rawSse, StreamListener listener, MessageRequest request) {
+        QwenResponseParser.ParsedResponse fallback = new QwenResponseParser.ParsedResponse();
+        fallback.action = "message";
+        fallback.explanation = text;
+        fallback.rawResponse = rawSse;
+        fallback.isValid = true;
+        listener.onStreamCompleted(request.getRequestId(), fallback);
     }
 
     private void performToolContinuation(JsonArray toolCalls, MessageRequest originalRequest, QwenConversationState state, StreamListener listener) {

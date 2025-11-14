@@ -352,26 +352,6 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
             List<ChatMessage.FileActionDetail> effectiveProposedFileChanges = proposedFileChanges;
             boolean isPlan = planSteps != null && !planSteps.isEmpty();
 
-            if ((effectiveProposedFileChanges == null || effectiveProposedFileChanges.isEmpty()) && !isPlan) {
-                try {
-                    QwenResponseParser.ParsedResponse parsed = null;
-                    if (rawAiResponseJson != null) {
-                        String normalized = AiResponseUtils.extractJsonFromContent(rawAiResponseJson);
-                        String toParse = normalized != null ? normalized : rawAiResponseJson;
-                        if (toParse != null) parsed = QwenResponseParser.parseResponse(toParse);
-                    }
-                    if (parsed == null && explanation != null && !explanation.isEmpty()) {
-                        String exNorm = AiResponseUtils.extractJsonFromContent(explanation);
-                        if (exNorm != null) parsed = QwenResponseParser.parseResponse(exNorm);
-                    }
-                    if (parsed != null && parsed.action != null && parsed.action.contains("file")) {
-                        effectiveProposedFileChanges = QwenResponseParser.toFileActionDetails(parsed);
-                    }
-                } catch (Exception e) {
-                    Log.w(TAG, "Fallback file op parse failed", e);
-                }
-            }
-
             boolean hasOps = effectiveProposedFileChanges != null && !effectiveProposedFileChanges.isEmpty();
             if (isPlan && hasOps) {
                 Log.w(TAG, "Mixed 'plan' and 'file_operation' detected; preferring plan.");

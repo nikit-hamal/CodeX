@@ -31,14 +31,15 @@ final class AiResponseUtils {
         if (content == null || content.trim().isEmpty()) {
             return null;
         }
-
-        Pattern fencedJson = Pattern.compile("```json\\s*([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
+        // Updated regex to be more robust
+        Pattern fencedJson = Pattern.compile("(?s)```json\\s*(.*?)\\s*```");
         Matcher matcher = fencedJson.matcher(content);
         if (matcher.find()) {
             return matcher.group(1).trim();
         }
 
-        Pattern fenced = Pattern.compile("```\\s*([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
+        // Fallback for cases where the language is not specified
+        Pattern fenced = Pattern.compile("(?s)```\\s*(\\{.*\\})\\s*```");
         matcher = fenced.matcher(content);
         if (matcher.find()) {
             String extracted = matcher.group(1).trim();
