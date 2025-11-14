@@ -351,7 +351,7 @@ public class EditorActivity extends AppCompatActivity implements
 
     @Override
     public AIAssistant getAIAssistant() {
-        return aiAssistantManager.getAIAssistant(); // Get from AiAssistantManager
+        return aiAssistantManager.getAiAssistant(); // Get from AiAssistantManager
     }
 
     @Override
