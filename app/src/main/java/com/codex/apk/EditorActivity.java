@@ -182,7 +182,6 @@ public class EditorActivity extends AppCompatActivity implements
     @Override
     protected void onResume() {
         super.onResume();
-        aiAssistantManager.onResume(); // Delegate API key refresh
         if (fileTreeManager != null) {
             fileTreeManager.rebuildFileTree();
         }
