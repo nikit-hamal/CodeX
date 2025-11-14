@@ -67,6 +67,9 @@ public class AiActionApplier {
                     // Refresh tabs and file tree
                     activity.tabManager.refreshOpenTabsAfterAi();
                     activity.loadFileTree();
+                    if (planExecutor != null && planExecutor.isAwaitingUserApproval(messagePosition)) {
+                        planExecutor.onStepActionsApplied();
+                    }
                 });
             } catch (Exception e) {
                 Log.e(TAG, "Error applying AI actions: " + e.getMessage(), e);
@@ -121,7 +124,7 @@ public class AiActionApplier {
                 activity.tabManager.refreshOpenTabsAfterAi();
                 activity.loadFileTree();
                 activity.showToast(finalAnyFailed ? "Agent steps completed with issues" : "Agent step applied");
-                if (planExecutor != null && planExecutor.isExecutingPlan()) {
+                if (planExecutor != null && planExecutor.isPlanMessage(messagePosition)) {
                     planExecutor.onStepActionsApplied();
                 }
             });

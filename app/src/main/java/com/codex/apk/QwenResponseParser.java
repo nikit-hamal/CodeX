@@ -2,6 +2,7 @@ package com.codex.apk;
 
 import android.util.Log;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonParseException;
@@ -144,7 +145,13 @@ public class QwenResponseParser {
     public static ParsedResponse parseResponse(String responseText) {
         try {
             Log.d(TAG, "Parsing response: " + responseText.substring(0, Math.min(200, responseText.length())) + "...");
-            JsonObject jsonObj = JsonParser.parseString(responseText).getAsJsonObject();
+            JsonElement rootElement = JsonParser.parseString(responseText);
+            if (rootElement.isJsonArray()) {
+                JsonObject wrapper = new JsonObject();
+                wrapper.add("operations", rootElement.getAsJsonArray());
+                return parseFileOperationResponse(wrapper);
+            }
+            JsonObject jsonObj = rootElement.getAsJsonObject();
 
             // Plan response (more flexible: any JSON with a "steps" array is considered a plan)
             if (jsonObj.has("steps") && jsonObj.get("steps").isJsonArray()) {
@@ -165,6 +172,17 @@ public class QwenResponseParser {
             if (jsonObj.has("operations") && jsonObj.get("operations").isJsonArray()) {
                 Log.d(TAG, "Detected 'operations' array, parsing as multi-operation response");
                 return parseFileOperationResponse(jsonObj);
+            }
+
+            if (jsonObj.has("tool_code")) {
+                JsonArray arr = new JsonArray();
+                arr.add(jsonObj);
+                JsonObject wrapper = new JsonObject();
+                wrapper.add("operations", arr);
+                if (jsonObj.has("commentary")) {
+                    wrapper.addProperty("commentary", jsonObj.get("commentary").getAsString());
+                }
+                return parseFileOperationResponse(wrapper);
             }
 
             // Fallback to single-operation if 'operations' is not present
@@ -268,72 +286,111 @@ public class QwenResponseParser {
      */
     private static ParsedResponse parseFileOperationResponse(JsonObject jsonObj) {
         List<FileOperation> operations = new ArrayList<>();
-        
         if (jsonObj.has("operations")) {
             JsonArray operationsArray = jsonObj.getAsJsonArray("operations");
             for (int i = 0; i < operationsArray.size(); i++) {
+                if (!operationsArray.get(i).isJsonObject()) continue;
                 JsonObject operation = operationsArray.get(i).getAsJsonObject();
+                boolean toolSchema = operation.has("tool_code");
+                JsonObject payload = toolSchema && operation.has("parameters") && operation.get("parameters").isJsonObject()
+                        ? operation.getAsJsonObject("parameters")
+                        : operation;
 
-                String type = operation.get("type").getAsString();
-                String path = operation.has("path") ? operation.get("path").getAsString() : "";
+                String type = toolSchema ? readString(operation, "tool_code") : readString(operation, "type", "action");
+                if (type == null || type.trim().isEmpty()) continue;
 
-                // If modifyLines is present with search/replace pairs, expand into multiple searchAndReplace operations
+                String path = firstNonEmpty(payload, "path", "relative_path", "target_path");
+                if (path == null) path = firstNonEmpty(operation, "path");
+
                 if (operation.has("modifyLines") && operation.get("modifyLines").isJsonArray()) {
                     JsonArray hunks = operation.getAsJsonArray("modifyLines");
                     for (int j = 0; j < hunks.size(); j++) {
                         try {
                             JsonObject h = hunks.get(j).getAsJsonObject();
-                            String s = h.has("search") ? h.get("search").getAsString() : null;
-                            String r = h.has("replace") ? h.get("replace").getAsString() : null;
+                            String s = firstNonEmpty(h, "search");
+                            String r = firstNonEmpty(h, "replace");
                             if (s == null || r == null) continue;
                             operations.add(new FileOperation(
-                                "searchAndReplace", path, "", "", "", s, r,
-                                (Integer) null, (Integer) null, (java.util.List<String>) null,
-                                (String) null, (String) null, (String) null, (String) null,
-                                (Boolean) null, (Boolean) null, (String) null, (String) null,
-                                (Boolean) null, (String) null
+                                    "searchAndReplace",
+                                    path != null ? path : "",
+                                    "",
+                                    "",
+                                    "",
+                                    s,
+                                    r,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null
                             ));
                         } catch (Exception ignored) {}
                     }
                     continue;
                 }
 
-                String content = operation.has("content") ? operation.get("content").getAsString() :
-                               (operation.has("newContent") ? operation.get("newContent").getAsString() : "");
-                String oldPath = operation.has("oldPath") ? operation.get("oldPath").getAsString() : "";
-                String newPath = operation.has("newPath") ? operation.get("newPath").getAsString() : "";
-                String search = operation.has("search") ? operation.get("search").getAsString() : "";
-                String replace = operation.has("replace") ? operation.get("replace").getAsString() : "";
+                String content = firstNonEmpty(payload, "content", "newContent", "body", "text");
+                String oldPath = firstNonEmpty(payload, "oldPath", "old_path", "from", "source_path");
+                if (oldPath == null) oldPath = firstNonEmpty(operation, "oldPath", "old_path");
+                String newPath = firstNonEmpty(payload, "newPath", "new_path", "to", "target_path", "destination_path");
+                if (newPath == null) newPath = firstNonEmpty(operation, "newPath", "new_path");
+                String search = firstNonEmpty(payload, "search");
+                String replace = firstNonEmpty(payload, "replace");
 
-                // Advanced fields
-                String updateType = operation.has("updateType") ? operation.get("updateType").getAsString() : null;
-                String searchPattern = operation.has("searchPattern") ? operation.get("searchPattern").getAsString() : null;
-                String replaceWith = operation.has("replaceWith") ? operation.get("replaceWith").getAsString() : null;
-                String diffPatch = operation.has("diffPatch") ? operation.get("diffPatch").getAsString() : null;
-                Boolean createBackup = operation.has("createBackup") ? operation.get("createBackup").getAsBoolean() : null;
-                Boolean validateContent = operation.has("validateContent") ? operation.get("validateContent").getAsBoolean() : null;
-                String contentType = operation.has("contentType") ? operation.get("contentType").getAsString() : null;
-                String errorHandling = operation.has("errorHandling") ? operation.get("errorHandling").getAsString() : null;
-                Boolean generateDiff = operation.has("generateDiff") ? operation.get("generateDiff").getAsBoolean() : null;
-                String diffFormat = operation.has("diffFormat") ? operation.get("diffFormat").getAsString() : null;
-                Integer startLine = operation.has("startLine") ? operation.get("startLine").getAsInt() : null;
-                Integer deleteCount = operation.has("deleteCount") ? operation.get("deleteCount").getAsInt() : null;
+                String updateType = firstNonEmpty(payload, "updateType");
+                String searchPattern = firstNonEmpty(payload, "searchPattern");
+                String replaceWith = firstNonEmpty(payload, "replaceWith");
+                String diffPatch = firstNonEmpty(payload, "diff", "diffPatch");
+                Boolean createBackup = readBoolean(payload, "createBackup");
+                Boolean validateContent = readBoolean(payload, "validateContent");
+                String contentType = firstNonEmpty(payload, "contentType");
+                String errorHandling = firstNonEmpty(payload, "errorHandling");
+                Boolean generateDiff = readBoolean(payload, "generateDiff");
+                String diffFormat = firstNonEmpty(payload, "diffFormat");
+
+                Integer startLine = readInteger(payload, "startLine");
+                Integer deleteCount = readInteger(payload, "deleteCount");
                 List<String> insertLines = null;
-                if (operation.has("insertLines") && operation.get("insertLines").isJsonArray()) {
+                if (payload.has("insertLines") && payload.get("insertLines").isJsonArray()) {
                     insertLines = new ArrayList<>();
-                    JsonArray arr = operation.getAsJsonArray("insertLines");
+                    JsonArray arr = payload.getAsJsonArray("insertLines");
                     for (int j = 0; j < arr.size(); j++) insertLines.add(arr.get(j).getAsString());
                 }
 
-                operations.add(new FileOperation(type, path, content, oldPath, newPath, search, replace,
-                        startLine, deleteCount, insertLines,
-                        updateType, searchPattern, replaceWith, diffPatch, createBackup, validateContent, contentType,
-                        errorHandling, generateDiff, diffFormat));
+                operations.add(new FileOperation(
+                        type,
+                        path != null ? path : "",
+                        content != null ? content : "",
+                        oldPath != null ? oldPath : "",
+                        newPath != null ? newPath : "",
+                        search != null ? search : "",
+                        replace != null ? replace : "",
+                        startLine,
+                        deleteCount,
+                        insertLines,
+                        updateType,
+                        searchPattern,
+                        replaceWith,
+                        diffPatch,
+                        createBackup,
+                        validateContent,
+                        contentType,
+                        errorHandling,
+                        generateDiff,
+                        diffFormat));
             }
         }
-        
-        String explanation = jsonObj.has("explanation") ? jsonObj.get("explanation").getAsString() : "";
-        
+
+        String explanation = jsonObj.has("commentary") ? jsonObj.get("commentary").getAsString()
+                : (jsonObj.has("explanation") ? jsonObj.get("explanation").getAsString() : "");
         return new ParsedResponse("file_operation", operations, new ArrayList<>(), explanation, true);
     }
 
@@ -346,10 +403,57 @@ public class QwenResponseParser {
                                 jsonObj.toString(), true);
     }
 
+    private static String readString(JsonObject obj, String... keys) {
+        if (obj == null || keys == null) return null;
+        for (String key : keys) {
+            if (key == null) continue;
+            if (obj.has(key) && !obj.get(key).isJsonNull()) {
+                try {
+                    return obj.get(key).getAsString();
+                } catch (Exception ignored) {}
+            }
+        }
+        return null;
+    }
+
+    private static String firstNonEmpty(JsonObject obj, String... keys) {
+        String value = readString(obj, keys);
+        return (value != null && !value.isEmpty()) ? value : null;
+    }
+
+    private static Integer readInteger(JsonObject obj, String... keys) {
+        if (obj == null || keys == null) return null;
+        for (String key : keys) {
+            if (key == null) continue;
+            if (obj.has(key) && !obj.get(key).isJsonNull()) {
+                try {
+                    return obj.get(key).getAsInt();
+                } catch (Exception ignored) {}
+            }
+        }
+        return null;
+    }
+
+    private static Boolean readBoolean(JsonObject obj, String... keys) {
+        if (obj == null || keys == null) return null;
+        for (String key : keys) {
+            if (key == null) continue;
+            if (obj.has(key) && !obj.get(key).isJsonNull()) {
+                try {
+                    return obj.get(key).getAsBoolean();
+                } catch (Exception ignored) {}
+            }
+        }
+        return null;
+    }
+
     private static boolean isSingleFileAction(String action) {
         return "createFile".equals(action) || "updateFile".equals(action) || "deleteFile".equals(action)
                 || "renameFile".equals(action) || "readFile".equals(action) || "listFiles".equals(action)
-                || "searchAndReplace".equals(action) || "patchFile".equals(action) || "smartUpdate".equals(action);
+                || "searchAndReplace".equals(action) || "patchFile".equals(action) || "smartUpdate".equals(action)
+                || "write_to_file".equals(action) || "replace_in_file".equals(action)
+                || "append_to_file".equals(action) || "prepend_to_file".equals(action)
+                || "delete_path".equals(action) || "rename_path".equals(action);
     }
 
     /**

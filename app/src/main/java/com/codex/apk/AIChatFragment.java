@@ -37,8 +37,6 @@ public class AIChatFragment extends Fragment implements ChatMessageAdapter.OnAiA
         void onReapplyActions(int messagePosition, ChatMessage message);
         void onAiFileChangeClicked(ChatMessage.FileActionDetail fileActionDetail);
         void onQwenConversationStateUpdated(QwenConversationState state);
-        void onPlanAcceptClicked(int messagePosition, ChatMessage message);
-        void onPlanDiscardClicked(int messagePosition, ChatMessage message);
     }
 
     // Hook used by UI manager to trigger attachment selection
@@ -350,10 +348,6 @@ public class AIChatFragment extends Fragment implements ChatMessageAdapter.OnAiA
     public void onReapplyClicked(int pos, ChatMessage msg) { if (listener != null) listener.onReapplyActions(pos, msg); }
     @Override
     public void onFileChangeClicked(ChatMessage.FileActionDetail detail) { if (listener != null) listener.onAiFileChangeClicked(detail); }
-    @Override
-    public void onPlanAcceptClicked(int pos, ChatMessage msg) { if (listener != null) listener.onPlanAcceptClicked(pos, msg); }
-    @Override
-    public void onPlanDiscardClicked(int pos, ChatMessage msg) { if (listener != null) listener.onPlanDiscardClicked(pos, msg); }
 
     public void onQwenConversationStateUpdated(QwenConversationState state) {
         if (state != null) {

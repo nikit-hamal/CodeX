@@ -97,7 +97,7 @@ final class AiResponseUtils {
             if (detail.path != null && !detail.path.isEmpty()) {
                 allPaths.add(detail.path);
             }
-            if ("renameFile".equals(detail.type)) {
+            if ("renameFile".equals(detail.type) || "rename_path".equals(detail.type)) {
                 if (detail.oldPath != null && !detail.oldPath.isEmpty()) {
                     allPaths.add(detail.oldPath);
                 }
@@ -114,7 +114,7 @@ final class AiResponseUtils {
             for (int pass = 0; pass < 3; pass++) {
                 boolean changed = false;
                 for (ChatMessage.FileActionDetail detail : details) {
-                    if ("renameFile".equals(detail.type)
+                    if (("renameFile".equals(detail.type) || "rename_path".equals(detail.type))
                             && detail.newPath != null
                             && aliasSet.contains(detail.newPath)
                             && detail.oldPath != null) {
@@ -131,7 +131,8 @@ final class AiResponseUtils {
         }
 
         Function<ChatMessage.FileActionDetail, String> displayPath = detail -> {
-            if ("renameFile".equals(detail.type) && detail.newPath != null && !detail.newPath.isEmpty()) {
+            if (("renameFile".equals(detail.type) || "rename_path".equals(detail.type))
+                    && detail.newPath != null && !detail.newPath.isEmpty()) {
                 return detail.newPath;
             }
             return detail.path != null ? detail.path : "";
@@ -150,9 +151,9 @@ final class AiResponseUtils {
                 int[] delta = DiffUtils.countAddRemove(detail.diffPatch);
                 totals[0] += delta[0];
                 totals[1] += delta[1];
-            } else if ("createFile".equals(detail.type) && detail.newContent != null) {
+            } else if (("createFile".equals(detail.type) || "write_to_file".equals(detail.type)) && detail.newContent != null) {
                 totals[0] += countLines(detail.newContent);
-            } else if ("deleteFile".equals(detail.type) && detail.oldContent != null) {
+            } else if (("deleteFile".equals(detail.type) || "delete_path".equals(detail.type)) && detail.oldContent != null) {
                 totals[1] += countLines(detail.oldContent);
             } else if (detail.oldContent != null || detail.newContent != null) {
                 int[] delta = DiffUtils.countAddRemoveFromContents(detail.oldContent, detail.newContent);

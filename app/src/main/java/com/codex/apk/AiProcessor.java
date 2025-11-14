@@ -27,6 +27,24 @@ public class AiProcessor {
         String summary = "";
 
         switch (actionType) {
+            case "write_to_file":
+                summary = handleWriteToFile(detail);
+                break;
+            case "append_to_file":
+                summary = handleAppendOrPrepend(detail, true);
+                break;
+            case "prepend_to_file":
+                summary = handleAppendOrPrepend(detail, false);
+                break;
+            case "replace_in_file":
+                summary = handleReplaceInFile(detail);
+                break;
+            case "delete_path":
+                summary = handleDeleteFile(detail);
+                break;
+            case "rename_path":
+                summary = handleRenameFile(detail);
+                break;
             case "createFile":
                 summary = handleCreateFile(detail);
                 break;
@@ -53,6 +71,68 @@ public class AiProcessor {
                 throw new IllegalArgumentException("Unknown action type: " + actionType);
         }
         return summary;
+    }
+
+    private String handleWriteToFile(ChatMessage.FileActionDetail detail) throws IOException {
+        String path = detail.path;
+        if (path == null || path.trim().isEmpty()) {
+            throw new IllegalArgumentException("write_to_file requires a path");
+        }
+        File target = new File(projectDir, path);
+        File parent = target.getParentFile();
+        if (parent != null && !parent.exists()) parent.mkdirs();
+        String content = detail.newContent != null ? detail.newContent : "";
+        fileManager.writeFileContent(target, content);
+        return "Wrote file: " + path;
+    }
+
+    private String handleAppendOrPrepend(ChatMessage.FileActionDetail detail, boolean append) throws IOException {
+        String path = detail.path;
+        if (path == null || path.trim().isEmpty()) {
+            throw new IllegalArgumentException((append ? "append" : "prepend") + " requires a path");
+        }
+        File target = new File(projectDir, path);
+        File parent = target.getParentFile();
+        if (parent != null && !parent.exists()) parent.mkdirs();
+
+        String addition = detail.newContent != null ? detail.newContent : "";
+        String existing = target.exists() ? fileManager.readFileContent(target) : "";
+
+        StringBuilder builder = new StringBuilder();
+        if (append) {
+            builder.append(existing);
+            if (!existing.isEmpty() && !existing.endsWith("\n") && !addition.isEmpty()) {
+                builder.append("\n");
+            }
+            builder.append(addition);
+        } else {
+            builder.append(addition);
+            if (!addition.isEmpty() && !addition.endsWith("\n") && !existing.isEmpty()) {
+                builder.append("\n");
+            }
+            builder.append(existing);
+        }
+        fileManager.writeFileContent(target, builder.toString());
+        return (append ? "Appended to " : "Prepended to ") + path;
+    }
+
+    private String handleReplaceInFile(ChatMessage.FileActionDetail detail) throws IOException {
+        String path = detail.path;
+        if (path == null || path.trim().isEmpty()) {
+            throw new IllegalArgumentException("replace_in_file requires a path");
+        }
+        File target = new File(projectDir, path);
+        if (!target.exists()) {
+            throw new IOException("File not found for replace_in_file: " + path);
+        }
+        String diffPatch = detail.diffPatch;
+        if (diffPatch == null || diffPatch.trim().isEmpty()) {
+            throw new IllegalArgumentException("replace_in_file requires a structured diff payload");
+        }
+        String currentContent = fileManager.readFileContent(target);
+        String updatedContent = FileOps.applyStructuredDiff(currentContent, diffPatch);
+        fileManager.writeFileContent(target, updatedContent);
+        return "Patched file: " + path;
     }
 
     private String handleAdvancedUpdateFile(ChatMessage.FileActionDetail detail) throws IOException {

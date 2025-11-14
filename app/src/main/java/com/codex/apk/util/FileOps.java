@@ -122,6 +122,78 @@ public final class FileOps {
         return String.join("\n", out);
     }
 
+    /** Structured diff representation used by replace_in_file operations. */
+    public static class StructuredDiffBlock {
+        public final String search;
+        public final String replace;
+
+        public StructuredDiffBlock(String search, String replace) {
+            this.search = search;
+            this.replace = replace;
+        }
+    }
+
+    public static List<StructuredDiffBlock> parseStructuredDiff(String spec) {
+        if (spec == null || spec.trim().isEmpty()) {
+            throw new IllegalArgumentException("Diff spec cannot be empty");
+        }
+        String normalized = spec.replace("\r\n", "\n");
+        List<StructuredDiffBlock> blocks = new ArrayList<>();
+        final String searchMarker = "------- SEARCH";
+        final String equalsMarker = "=======";
+        final String replaceMarker = "+++++++ REPLACE";
+        int cursor = 0;
+        while (true) {
+            int searchIdx = normalized.indexOf(searchMarker, cursor);
+            if (searchIdx == -1) break;
+
+            int searchBodyStart = normalized.indexOf('\n', searchIdx);
+            if (searchBodyStart == -1) {
+                throw new IllegalArgumentException("Structured diff missing newline after SEARCH marker");
+            }
+            int equalsIdx = normalized.indexOf(equalsMarker, searchBodyStart + 1);
+            if (equalsIdx == -1) {
+                throw new IllegalArgumentException("Structured diff missing ======= marker");
+            }
+            String searchBlock = normalized.substring(searchBodyStart + 1, equalsIdx);
+
+            int replaceBodyStart = normalized.indexOf('\n', equalsIdx);
+            if (replaceBodyStart == -1) {
+                throw new IllegalArgumentException("Structured diff missing newline after ======= marker");
+            }
+            int replaceIdx = normalized.indexOf(replaceMarker, replaceBodyStart + 1);
+            if (replaceIdx == -1) {
+                throw new IllegalArgumentException("Structured diff missing +++++++ REPLACE marker");
+            }
+            String replaceBlock = normalized.substring(replaceBodyStart + 1, replaceIdx);
+
+            blocks.add(new StructuredDiffBlock(searchBlock, replaceBlock));
+            cursor = replaceIdx + replaceMarker.length();
+        }
+        if (blocks.isEmpty()) {
+            throw new IllegalArgumentException("Structured diff must contain at least one SEARCH/REPLACE block");
+        }
+        return blocks;
+    }
+
+    public static String applyStructuredDiff(String original, String spec) {
+        String result = original != null ? original : "";
+        List<StructuredDiffBlock> blocks = parseStructuredDiff(spec);
+        int searchFrom = 0;
+        for (StructuredDiffBlock block : blocks) {
+            if (block.search == null) {
+                throw new IllegalArgumentException("Structured diff block missing SEARCH content");
+            }
+            int idx = result.indexOf(block.search, searchFrom);
+            if (idx == -1) {
+                throw new IllegalArgumentException("Could not locate search block in file:\n" + block.search);
+            }
+            result = result.substring(0, idx) + block.replace + result.substring(idx + block.search.length());
+            searchFrom = Math.max(idx + block.replace.length(), 0);
+        }
+        return result;
+    }
+
     // ===== Consolidated search/file listing helpers (migrated from FileSearchHelper) =====
 
     // Line-number oriented search result flavor

@@ -392,16 +392,6 @@ public class EditorActivity extends AppCompatActivity implements
         }
     }
 
-    @Override
-    public void onPlanAcceptClicked(int messagePosition, ChatMessage message) {
-        aiAssistantManager.acceptPlan(messagePosition, message);
-    }
-
-    @Override
-    public void onPlanDiscardClicked(int messagePosition, ChatMessage message) {
-        aiAssistantManager.discardPlan(messagePosition, message);
-    }
-
     // Public methods for managers to call back to EditorActivity for UI updates or core actions
     public void showToast(String message) {
         runOnUiThread(() -> Toast.makeText(EditorActivity.this, message, Toast.LENGTH_SHORT).show());

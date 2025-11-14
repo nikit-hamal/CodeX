@@ -185,23 +185,14 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
             aiChatFragment.updateMessage(messagePosition, message);
         }
         activity.showToast("AI actions discarded.");
+        if (planExecutor != null && planExecutor.isAwaitingUserApproval(messagePosition)) {
+            planExecutor.onStepActionsRejected("User discarded plan step");
+        }
     }
 
     public void onReapplyActions(int messagePosition, ChatMessage message) {
         Log.d(TAG, "User requested to reapply AI actions for message at position: " + messagePosition);
         onAiAcceptActions(messagePosition, message);
-    }
-
-    public void acceptPlan(int messagePosition, ChatMessage message) {
-        if (planExecutor != null) {
-            planExecutor.acceptPlan(messagePosition, message);
-        }
-    }
-
-    public void discardPlan(int messagePosition, ChatMessage message) {
-        if (planExecutor != null) {
-            planExecutor.discardPlan(messagePosition, message);
-        }
     }
 
     public void onAiFileChangeClicked(ChatMessage.FileActionDetail fileActionDetail) {
@@ -402,12 +393,16 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
                 uiFrag.updateMessage(replacePos, aiMessage);
                 if (replacePos.equals(currentStreamingMessagePosition)) currentStreamingMessagePosition = null;
                 if (replacePos.equals(currentToolsMessagePosition)) currentToolsMessagePosition = null;
-                if (aiAssistant != null && aiAssistant.isAgentModeEnabled() && hasOps) {
+                if (isPlan && planExecutor != null) {
+                    planExecutor.startPlan(replacePos, aiMessage);
+                } else if (aiAssistant != null && aiAssistant.isAgentModeEnabled() && hasOps) {
                     onAiAcceptActions(replacePos, aiMessage);
                 }
             } else {
                 int insertedPos = uiFrag.addMessage(aiMessage);
-                if (aiAssistant != null && aiAssistant.isAgentModeEnabled() && hasOps) {
+                if (isPlan && planExecutor != null) {
+                    planExecutor.startPlan(insertedPos, aiMessage);
+                } else if (aiAssistant != null && aiAssistant.isAgentModeEnabled() && hasOps) {
                     onAiAcceptActions(insertedPos, aiMessage);
                 }
             }

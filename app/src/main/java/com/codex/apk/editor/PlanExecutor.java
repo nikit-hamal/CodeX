@@ -30,6 +30,7 @@ public class PlanExecutor {
     private int planProgressIndex = 0;
     private int planStepRetryCount = 0;
     private boolean isExecutingPlan = false;
+    private boolean waitingForUserApproval = false;
     private final Deque<String> executedStepSummaries = new ArrayDeque<>();
 
     public PlanExecutor(EditorActivity activity, AiAssistantManager aiAssistantManager) {
@@ -40,10 +41,27 @@ public class PlanExecutor {
     public boolean isExecutingPlan() {
         return isExecutingPlan;
     }
+    public boolean isAwaitingUserApproval(int messagePosition) {
+        return waitingForUserApproval && lastPlanMessagePosition != null && lastPlanMessagePosition == messagePosition;
+    }
+    public boolean isPlanMessage(int messagePosition) {
+        return lastPlanMessagePosition != null && lastPlanMessagePosition == messagePosition;
+    }
 
-    public void acceptPlan(int messagePosition, ChatMessage message) {
-        Log.d(TAG, "User accepted plan for message at position: " + messagePosition);
+    public void cancelPlan(String message) {
+        if (!isExecutingPlan) return;
+        waitingForUserApproval = false;
+        finalizePlanExecution(message != null ? message : "Plan cancelled", true);
+    }
+
+    public void startPlan(int messagePosition, ChatMessage message) {
+        Log.d(TAG, "Starting plan auto-run for message at position: " + messagePosition);
+        if (isExecutingPlan) {
+            finalizePlanExecution("Superseding previous plan", true);
+        }
+
         isExecutingPlan = true;
+        waitingForUserApproval = false;
         planStepRetryCount = 0;
         message.setStatus(ChatMessage.STATUS_ACCEPTED);
         lastPlanMessagePosition = messagePosition;
@@ -60,17 +78,8 @@ public class PlanExecutor {
         sendNextPlanStepFollowUp();
     }
 
-    public void discardPlan(int messagePosition, ChatMessage message) {
-        Log.d(TAG, "User discarded plan for message at position: " + messagePosition);
-        message.setStatus(ChatMessage.STATUS_DISCARDED);
-        AIChatFragment aiChatFragment = activity.getAiChatFragment();
-        if (aiChatFragment != null) {
-            aiChatFragment.updateMessage(messagePosition, message);
-        }
-        finalizePlanExecution("Plan discarded.", true);
-    }
-
     public void onStepExecutionResult(List<ChatMessage.FileActionDetail> fileActions, String rawResponse, String explanation) {
+        waitingForUserApproval = false;
         if (fileActions != null && !fileActions.isEmpty()) {
             planStepRetryCount = 0;
             AIChatFragment frag = activity.getAiChatFragment();
@@ -86,13 +95,27 @@ public class PlanExecutor {
                     }
                 } catch (Exception ignored) {}
 
+                boolean agentMode = aiAssistantManager.getAIAssistant() != null
+                        && aiAssistantManager.getAIAssistant().isAgentModeEnabled();
+
                 List<ChatMessage.FileActionDetail> merged = planMsg.getProposedFileChanges() != null ? planMsg.getProposedFileChanges() : new ArrayList<>();
                 merged.addAll(fileActions);
                 planMsg.setProposedFileChanges(merged);
+                if (!agentMode) {
+                    markCurrentPlanStepStatus(planMsg, "awaiting_approval");
+                }
                 frag.updateMessage(lastPlanMessagePosition, planMsg);
-                aiAssistantManager.onAiAcceptActions(lastPlanMessagePosition, planMsg);
+
+                if (agentMode) {
+                    waitingForUserApproval = false;
+                    aiAssistantManager.onAiAcceptActions(lastPlanMessagePosition, planMsg);
+                } else {
+                    waitingForUserApproval = true;
+                }
                 return;
             }
+            finalizePlanExecution("Plan context unavailable", true);
+            return;
         } else {
             try {
                 AIChatFragment frag = activity.getAiChatFragment();
@@ -131,6 +154,7 @@ public class PlanExecutor {
     }
 
     public void onStepActionsApplied() {
+        waitingForUserApproval = false;
         setCurrentRunningPlanStepStatus("completed");
         AIChatFragment frag = activity.getAiChatFragment();
         if (lastPlanMessagePosition != null && frag != null) {
@@ -160,6 +184,14 @@ public class PlanExecutor {
         }
     }
 
+    private void markCurrentPlanStepStatus(ChatMessage planMsg, String status) {
+        if (planMsg == null || planMsg.getPlanSteps() == null || planMsg.getPlanSteps().isEmpty()) return;
+        if (planProgressIndex < planMsg.getPlanSteps().size()) {
+            ChatMessage.PlanStep ps = planMsg.getPlanSteps().get(planProgressIndex);
+            if (ps != null) ps.status = status;
+        }
+    }
+
     public void addExecutedStepSummary(String summary) {
         executedStepSummaries.add(summary);
     }
@@ -180,6 +212,12 @@ public class PlanExecutor {
         }
     }
 
+    public void onStepActionsRejected(String reason) {
+        waitingForUserApproval = false;
+        setCurrentRunningPlanStepStatus("failed");
+        finalizePlanExecution(reason != null ? reason : "Plan step discarded", true);
+    }
+
     public void finalizePlanExecution(String toastMessage, boolean sanitizeDanglingRunning) {
         AIChatFragment frag = activity.getAiChatFragment();
         if (sanitizeDanglingRunning && frag != null && lastPlanMessagePosition != null) {
@@ -193,6 +231,7 @@ public class PlanExecutor {
             }
         }
         isExecutingPlan = false;
+        waitingForUserApproval = false;
         if (frag != null) { frag.hideThinkingMessage(); }
         aiAssistantManager.setCurrentStreamingMessagePosition(null);
         lastPlanMessagePosition = null;
@@ -204,6 +243,10 @@ public class PlanExecutor {
     }
 
     private void sendNextPlanStepFollowUp() {
+        if (waitingForUserApproval) {
+            Log.d(TAG, "Paused for user approval. Waiting before sending next step.");
+            return;
+        }
         AIChatFragment frag = activity.getAiChatFragment();
         if (frag == null || lastPlanMessagePosition == null) {
             finalizePlanExecution("Plan completed", true);

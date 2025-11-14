@@ -276,6 +276,18 @@ public class ChatMessage {
             switch (type) {
                 case "createFile":
                     return "Create file: " + path;
+                case "write_to_file":
+                    return "Write file: " + path;
+                case "append_to_file":
+                    return "Append to file: " + path;
+                case "prepend_to_file":
+                    return "Prepend to file: " + path;
+                case "replace_in_file":
+                    return "Replace in file: " + path;
+                case "delete_path":
+                    return "Delete path: " + path;
+                case "rename_path":
+                    return "Rename path: " + oldPath + " to " + newPath;
                 case "updateFile":
                     return "Update file: " + path + " (" + updateType + ")";
                 case "smartUpdate":
