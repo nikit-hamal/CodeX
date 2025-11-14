@@ -12,20 +12,19 @@ import com.codex.apk.ai.AIProvider;
 
 public class AIAssistant {
 
-    private Map<AIProvider, ApiClient> apiClients = new HashMap<>();
+    private ApiClient apiClient;
     private AIModel currentModel;
     private boolean thinkingModeEnabled = false;
     private boolean webSearchEnabled = false;
-    private boolean agentModeEnabled = false; // New agent mode flag
+    private boolean agentModeEnabled = true; // New agent mode flag
     private List<ToolSpec> enabledTools = new ArrayList<>();
     private AIAssistant.AIActionListener actionListener;
     private File projectDir; // Track project directory for tool operations
-    private String apiKey = ""; // Tracks Gemini (official) API key
 
     public AIAssistant(Context context, ExecutorService executorService, AIActionListener actionListener) {
         this.actionListener = actionListener;
         this.currentModel = AIModel.fromModelId("qwen3-coder-plus");
-        initializeApiClients(context, null);
+        initializeApiClient(context, null);
     }
 
     // Legacy constructor for compatibility
@@ -34,22 +33,11 @@ public class AIAssistant {
         this.actionListener = actionListener;
         this.currentModel = AIModel.fromModelId("qwen3-coder-plus");
         this.projectDir = projectDir;
-        initializeApiClients(context, projectDir);
-        if (apiKey != null) this.apiKey = apiKey; else this.apiKey = SettingsActivity.getGeminiApiKey(context);
-        setApiKey(this.apiKey);
+        initializeApiClient(context, projectDir);
     }
 
-    private void initializeApiClients(Context context, File projectDir) {
-        apiClients.put(AIProvider.ALIBABA, new QwenApiClient(context, actionListener, projectDir));
-        apiClients.put(AIProvider.DEEPINFRA, new DeepInfraApiClient(context, actionListener));
-        apiClients.put(AIProvider.FREE, new AnyProviderApiClient(context, actionListener));
-        apiClients.put(AIProvider.COOKIES, new GeminiFreeApiClient(context, actionListener));
-        String initialKey = SettingsActivity.getGeminiApiKey(context);
-        this.apiKey = initialKey != null ? initialKey : "";
-        apiClients.put(AIProvider.GOOGLE, new GeminiOfficialApiClient(context, actionListener, this.apiKey));
-        apiClients.put(AIProvider.OIVSCodeSer0501, new OIVSCodeSer0501ApiClient(context, actionListener));
-        apiClients.put(AIProvider.WEWORDLE, new WeWordleApiClient(context, actionListener));
-        apiClients.put(AIProvider.OPENROUTER, new OpenRouterApiClient(context, actionListener));
+    private void initializeApiClient(Context context, File projectDir) {
+        apiClient = new QwenApiClient(context, actionListener, projectDir);
     }
 
     public void sendPrompt(String userPrompt, List<ChatMessage> chatHistory, QwenConversationState qwenState, String fileName, String fileContent) {
@@ -68,8 +56,7 @@ public class AIAssistant {
     }
 
     public void sendMessageStreaming(String message, List<ChatMessage> chatHistory, QwenConversationState qwenState, List<File> attachments, String fileName, String fileContent) {
-        ApiClient client = apiClients.get(currentModel.getProvider());
-        if (client instanceof StreamingApiClient) {
+        if (apiClient instanceof StreamingApiClient) {
              String finalMessage = message;
             if (fileContent != null && !fileContent.isEmpty()) {
                 finalMessage = "File `" + fileName + "`:\n```\n" + fileContent + "\n```\n\n" + message;
@@ -91,33 +78,10 @@ public class AIAssistant {
                 .attachments(attachments)
                 .build();
 
-            ((StreamingApiClient) client).sendMessageStreaming(request, (StreamingApiClient.StreamListener) actionListener);
+            ((StreamingApiClient) apiClient).sendMessageStreaming(request, (StreamingApiClient.StreamListener) actionListener);
         } else {
             if (actionListener != null) {
                 actionListener.onAiError("API client for " + currentModel.getProvider() + " not found.");
-            }
-        }
-    }
-
-    public void refreshModelsForProvider(AIProvider provider, RefreshCallback callback) {
-        ApiClient client = apiClients.get(provider);
-        if (client != null) {
-            new Thread(() -> {
-                List<AIModel> models = client.fetchModels();
-                if (models != null && !models.isEmpty()) {
-                    AIModel.updateModelsForProvider(provider, models);
-                    if (callback != null) {
-                        callback.onRefreshComplete(true, "Models refreshed successfully for " + provider.name());
-                    }
-                } else {
-                    if (callback != null) {
-                        callback.onRefreshComplete(false, "Failed to refresh models for " + provider.name());
-                    }
-                }
-            }).start();
-        } else {
-            if (callback != null) {
-                callback.onRefreshComplete(false, "API client for provider " + provider.name() + " not found.");
             }
         }
     }
@@ -151,13 +115,5 @@ public class AIAssistant {
     public void setAgentModeEnabled(boolean enabled) { this.agentModeEnabled = enabled; }
     public void setEnabledTools(List<ToolSpec> tools) { this.enabledTools = tools; }
     public void setActionListener(AIActionListener listener) { this.actionListener = listener; }
-    public String getApiKey() { return this.apiKey; }
-    public void setApiKey(String apiKey) {
-        this.apiKey = apiKey != null ? apiKey : "";
-        ApiClient google = apiClients.get(AIProvider.GOOGLE);
-        if (google instanceof GeminiOfficialApiClient) {
-            ((GeminiOfficialApiClient) google).setApiKey(this.apiKey);
-        }
-    }
     public void shutdown() {}
 }

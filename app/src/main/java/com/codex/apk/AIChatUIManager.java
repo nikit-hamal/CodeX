@@ -202,10 +202,8 @@ public class AIChatUIManager {
         // The individual settings inside the dialog are enabled/disabled based on capabilities.
         buttonAiSettings.setEnabled(true);
 
-        // Show attach button only for COOKIES (Gemini reverse-engineered) models
         if (buttonAiAttach != null) {
-            boolean showAttach = aiAssistant.getCurrentModel() != null && aiAssistant.getCurrentModel().getProvider() == AIProvider.COOKIES;
-            buttonAiAttach.setVisibility(showAttach ? View.VISIBLE : View.GONE);
+            buttonAiAttach.setVisibility(View.GONE);
         }
     }
 
@@ -215,12 +213,7 @@ public class AIChatUIManager {
         buttonAiSettings.setOnClickListener(v -> showAiSettingsDialog(fragment.getAIAssistant()));
         if (buttonAiAttach != null) {
             buttonAiAttach.setOnClickListener(v -> {
-                if (fragment.getAIAssistant() != null && fragment.getAIAssistant().getCurrentModel() != null
-                    && fragment.getAIAssistant().getCurrentModel().getProvider() == AIProvider.COOKIES) {
-                    fragment.onAttachButtonClicked();
-                } else {
-                    Toast.makeText(context, "Attachments available only for Gemini (Cookies) models", Toast.LENGTH_SHORT).show();
-                }
+                fragment.onAttachButtonClicked();
             });
         }
         editTextAiPrompt.setOnEditorActionListener((v, actionId, event) -> {

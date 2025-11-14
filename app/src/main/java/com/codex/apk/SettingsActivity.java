@@ -70,13 +70,9 @@ public class SettingsActivity extends AppCompatActivity {
 	
 	private void initializeSettings() {
 		// Initialize settings controls from the layout
-		com.google.android.material.textfield.TextInputEditText apiKeyEditText = findViewById(R.id.edit_text_api_key);
-		com.google.android.material.textfield.TextInputEditText cookie1psidEditText = findViewById(R.id.edit_text_secure_1psid);
-		com.google.android.material.textfield.TextInputEditText cookie1psidtsEditText = findViewById(R.id.edit_text_secure_1psidts);
 		LinearLayout themeSelectorLayout = findViewById(R.id.layout_theme_selector);
 		TextView selectedThemeText = findViewById(R.id.text_selected_theme);
 		com.google.android.material.card.MaterialCardView modelsCard = findViewById(R.id.card_models);
-		com.google.android.material.card.MaterialCardView apiCard = findViewById(R.id.card_api);
 		com.google.android.material.materialswitch.MaterialSwitch wrapSwitch = findViewById(R.id.switch_wrap);
 		com.google.android.material.materialswitch.MaterialSwitch readOnlySwitch = findViewById(R.id.switch_read_only);
 		com.google.android.material.slider.Slider fontSizeSlider = findViewById(R.id.slider_font_size);
@@ -84,14 +80,10 @@ public class SettingsActivity extends AppCompatActivity {
 		// Load saved settings
 		SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
 		SharedPreferences defaultPrefs = getPreferences(this);
-		String savedApiKey = prefs.getString("gemini_api_key", "");
 		String savedTheme = defaultPrefs.getString("app_theme", "light");
-		String saved1psid = prefs.getString("secure_1psid", "");
-		String saved1psidts = prefs.getString("secure_1psidts", "");
 		boolean wrapEnabled = isDefaultWordWrap(this);
 		boolean readOnlyEnabled = isDefaultReadOnly(this);
 
-		if (apiKeyEditText != null) apiKeyEditText.setText(savedApiKey);
 		if (selectedThemeText != null) selectedThemeText.setText(getThemeDisplayName(savedTheme));
 		if (wrapSwitch != null) wrapSwitch.setChecked(wrapEnabled);
 		if (readOnlySwitch != null) readOnlySwitch.setChecked(readOnlyEnabled);
@@ -103,9 +95,6 @@ public class SettingsActivity extends AppCompatActivity {
 		if (themeSelectorLayout != null) themeSelectorLayout.setOnClickListener(v -> showThemeSelector());
 		if (modelsCard != null) modelsCard.setOnClickListener(v -> {
 			startActivity(new Intent(this, ModelsActivity.class));
-		});
-		if (apiCard != null) apiCard.setOnClickListener(v -> {
-			startActivity(new Intent(this, ApiActivity.class));
 		});
 		findViewById(R.id.about_card).setOnClickListener(v -> {
             startActivity(new Intent(this, AboutActivity.class));
@@ -202,15 +191,6 @@ public class SettingsActivity extends AppCompatActivity {
 		return context.getSharedPreferences("settings", MODE_PRIVATE);
 	}
 	
-	// Helper methods to get specific settings
-	public static String getGeminiApiKey(android.content.Context context) {
-		return getPreferences(context).getString("gemini_api_key", "");
-	}
-
-	public static String getOpenRouterApiKey(android.content.Context context) {
-		return getPreferences(context).getString("openrouter_api_key", "");
-	}
-	
 	public static String getAppTheme(android.content.Context context) {
 		return getPreferences(context).getString("app_theme", "light");
 	}
@@ -250,14 +230,6 @@ public class SettingsActivity extends AppCompatActivity {
 		return getPreferences(context).getString("qwen_api_token", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjhiYjQ1NjVmLTk3NjUtNDQwNi04OWQ5LTI3NmExMTIxMjBkNiIsImxhc3RfcGFzc3dvcmRfY2hhbmdlIjoxNzUwNjYwODczLCJleHAiOjE3NTU4NDg1NDh9.pb0IybY9tQkriqMUOos72FKtZM3G4p1_aDzwqqh5zX4");
 	}
 
-	public static String getSecure1PSID(Context context) {
-		return getPreferences(context).getString("secure_1psid", "");
-	}
-
-	public static String getSecure1PSIDTS(Context context) {
-		return getPreferences(context).getString("secure_1psidts", "");
-	}
-
 	// Custom prompt settings
 	public static String getCustomFileOpsPrompt(Context context) {
 		return getPreferences(context).getString("custom_fileops_prompt", "");
@@ -270,27 +242,6 @@ public class SettingsActivity extends AppCompatActivity {
 	}
 	public static void setCustomGeneralPrompt(Context context, String prompt) {
 		getPreferences(context).edit().putString("custom_general_prompt", prompt != null ? prompt : "").apply();
-	}
-
-
-	// Cache helpers for __Secure-1PSIDTS keyed by the 1PSID value
-	public static String getCached1psidts(Context context, String psid) {
-		if (psid == null || psid.isEmpty()) return "";
-		return getPreferences(context).getString("cached_1psidts_" + psid, "");
-	}
-	public static void setCached1psidts(Context context, String psid, String psidts) {
-		if (psid == null || psid.isEmpty() || psidts == null || psidts.isEmpty()) return;
-		getPreferences(context).edit().putString("cached_1psidts_" + psid, psidts).apply();
-	}
-
-	// Free provider chat metadata cache (per model id). Value is JSON array string like [cid, rid, rcid]
-	public static String getFreeConversationMetadata(Context context, String modelId) {
-		if (modelId == null) return "";
-		return getPreferences(context).getString("free_conv_meta_" + modelId, "");
-	}
-	public static void setFreeConversationMetadata(Context context, String modelId, String metadataJsonArray) {
-		if (modelId == null || metadataJsonArray == null || metadataJsonArray.isEmpty()) return;
-		getPreferences(context).edit().putString("free_conv_meta_" + modelId, metadataJsonArray).apply();
 	}
 
 	public static boolean isLineNumbersEnabled(android.content.Context context) {

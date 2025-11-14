@@ -126,20 +126,7 @@ public class ModelAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
         public void bind(AIProvider provider) {
             providerName.setText(provider.getDisplayName());
 
-            boolean supportsRefresh = provider == AIProvider.OPENROUTER ||
-                                      provider == AIProvider.DEEPINFRA ||
-                                      provider == AIProvider.GOOGLE;
-
-            if (supportsRefresh) {
-                refreshIcon.setVisibility(View.VISIBLE);
-                refreshIcon.setOnClickListener(v -> {
-                    if (refreshClickListener != null) {
-                        refreshClickListener.onRefreshClicked(provider);
-                    }
-                });
-            } else {
-                refreshIcon.setVisibility(View.GONE);
-            }
+            refreshIcon.setVisibility(View.GONE);
 
             List<AIModel> providerModels = modelsByProvider.get(provider);
             boolean allChecked = true;

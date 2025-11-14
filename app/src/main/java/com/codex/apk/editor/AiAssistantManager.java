@@ -69,8 +69,7 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
         this.streamingHandler = new AiStreamingHandler(activity, this);
         this.responseRenderer = new AiResponseRenderer();
 
-        String apiKey = SettingsActivity.getGeminiApiKey(activity);
-        this.aiAssistant = new AIAssistant(activity, apiKey, projectDir, projectName, executorService, this);
+        this.aiAssistant = new AIAssistant(activity, null, projectDir, projectName, executorService, this);
         this.aiAssistant.setEnabledTools(com.codex.apk.ToolSpec.defaultFileToolsPlusSearchNet());
 
         // Model selection: prefer per-project last-used, else global default, else fallback
@@ -106,15 +105,6 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
     }
 
     public AIAssistant getAIAssistant() { return aiAssistant; }
-
-    public void onResume() {
-        String updatedApiKey = SettingsActivity.getGeminiApiKey(activity);
-        String currentApiKeyInAssistant = aiAssistant.getApiKey();
-        if (!updatedApiKey.equals(currentApiKeyInAssistant)) {
-            Log.i(TAG, "API Key changed in settings. Updating AIAssistant API key.");
-            aiAssistant.setApiKey(updatedApiKey);
-        }
-    }
 
     private boolean isNetworkAvailable() {
         ConnectivityManager connectivityManager = (ConnectivityManager) activity.getSystemService(Context.CONNECTIVITY_SERVICE);

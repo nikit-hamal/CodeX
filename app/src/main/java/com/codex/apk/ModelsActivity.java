@@ -68,17 +68,6 @@ public class ModelsActivity extends AppCompatActivity {
             }
             public java.util.List<?> getItems() { try { java.lang.reflect.Field f = ModelAdapter.class.getDeclaredField("items"); f.setAccessible(true); return (java.util.List<?>) f.get(this);} catch(Exception e){ return java.util.Collections.emptyList(); } }
         };
-        adapter.setOnRefreshClickListener(provider -> {
-            Toast.makeText(this, "Refreshing " + provider.getDisplayName() + " models...", Toast.LENGTH_SHORT).show();
-            aiAssistant.refreshModelsForProvider(provider, (success, message) -> {
-                runOnUiThread(() -> {
-                    Toast.makeText(ModelsActivity.this, message, Toast.LENGTH_SHORT).show();
-                    if (success) {
-                        setupAdapter();
-                    }
-                });
-            });
-        });
         recyclerView.setAdapter(adapter);
     }
 

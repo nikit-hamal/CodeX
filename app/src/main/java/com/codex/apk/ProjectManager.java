@@ -32,14 +32,12 @@ public class ProjectManager {
     private final Context context;
     private ArrayList<HashMap<String, Object>> projectsList;
     private ProjectsAdapter projectsAdapter;
-    private final TemplateManager templateManager;
 
     public ProjectManager(MainActivity mainActivity, ArrayList<HashMap<String, Object>> projectsList, ProjectsAdapter projectsAdapter) {
         this.mainActivity = mainActivity;
         this.context = mainActivity.getApplicationContext();
         this.projectsList = projectsList;
         this.projectsAdapter = projectsAdapter;
-        this.templateManager = new TemplateManager();
     }
 
     public void loadProjectsList() {
@@ -149,21 +147,6 @@ public class ProjectManager {
 
         View dialogView = LayoutInflater.from(mainActivity).inflate(R.layout.dialog_new_project, null);
         TextInputEditText editTextProjectName = dialogView.findViewById(R.id.edittext_project_name);
-        ChipGroup projectTypeChipGroup = dialogView.findViewById(R.id.chip_group_project_type);
-        ChipGroup templateStyleChipGroup = dialogView.findViewById(R.id.chip_group_template_style);
-        View templateStyleLabel = dialogView.findViewById(R.id.text_template_style_label);
-        View templateStyleScroll = dialogView.findViewById(R.id.scroll_template_style);
-
-        // Set up project type selection
-        projectTypeChipGroup.setOnCheckedChangeListener((group, checkedId) -> {
-            if (checkedId == R.id.chip_empty) {
-                templateStyleLabel.setVisibility(View.GONE);
-                templateStyleScroll.setVisibility(View.GONE);
-            } else {
-                templateStyleLabel.setVisibility(View.VISIBLE);
-                templateStyleScroll.setVisibility(View.VISIBLE);
-            }
-        });
 
         AlertDialog dialog = new MaterialAlertDialogBuilder(mainActivity, R.style.AlertDialogCustom)
                 .setTitle(context.getString(R.string.create_new_project))
@@ -182,24 +165,6 @@ public class ProjectManager {
                     return;
                 }
 
-                // Get selected project type (only: empty, html_css_js, tailwind)
-                int selectedProjectTypeId = projectTypeChipGroup.getCheckedChipId();
-                String projectType = "empty";
-                if (selectedProjectTypeId == R.id.chip_html_css_js) {
-                    projectType = "html_css_js";
-                } else if (selectedProjectTypeId == R.id.chip_tailwind) {
-                    projectType = "tailwind";
-                }
-
-                // Get selected template style
-                String templateStyle = "basic";
-                if (templateStyleLabel.getVisibility() == View.VISIBLE) {
-                    int selectedTemplateStyleId = templateStyleChipGroup.getCheckedChipId();
-                    if (selectedTemplateStyleId == R.id.chip_responsive) {
-                        templateStyle = "responsive";
-                    }
-                }
-
                 File projectsDir = new File(Environment.getExternalStorageDirectory(), "CodeX/Projects");
                 if (!projectsDir.exists()) {
                     projectsDir.mkdirs();
@@ -215,8 +180,6 @@ public class ProjectManager {
                     if (!newProjectDir.mkdirs()) {
                         throw new IOException(context.getString(R.string.failed_to_create_project_directory));
                     }
-
-                    createTemplateFiles(newProjectDir, projectName, projectType, templateStyle);
 
                     long creationTime = System.currentTimeMillis();
                     SimpleDateFormat sdf = new SimpleDateFormat("MMM dd,yyyy HH:mm", Locale.getDefault());
@@ -275,50 +238,6 @@ public class ProjectManager {
         projectsList.addAll(filesystemProjects);
 
         saveProjectsList();
-    }
-
-    private void createTemplateFiles(File projectDir, String projectName, String projectType, String templateStyle) throws IOException {
-        FileManager fileManager = new FileManager(context, projectDir);
-        switch (projectType) {
-            case "empty":
-                // no files
-                break;
-            case "html_css_js":
-                createHtmlCssJsProject(projectDir, projectName, templateStyle, fileManager);
-                break;
-            case "tailwind":
-                createTailwindProject(projectDir, projectName, templateStyle, fileManager);
-                break;
-            default:
-                createHtmlCssJsProject(projectDir, projectName, "basic", fileManager);
-                break;
-        }
-    }
-    
-    private void createHtmlCssJsProject(File projectDir, String projectName, String templateStyle, FileManager fileManager) throws IOException {
-        if ("basic".equals(templateStyle)) {
-            fileManager.writeFileContent(new File(projectDir, "index.html"),
-                    templateManager.getBasicHtmlTemplate(projectName));
-            fileManager.writeFileContent(new File(projectDir, "style.css"),
-                    templateManager.getBasicCssTemplate());
-            fileManager.writeFileContent(new File(projectDir, "script.js"),
-                    templateManager.getBasicJsTemplate());
-        } else if ("responsive".equals(templateStyle)) {
-            fileManager.writeFileContent(new File(projectDir, "index.html"),
-                    templateManager.getResponsiveHtmlTemplate(projectName));
-            fileManager.writeFileContent(new File(projectDir, "style.css"),
-                    templateManager.getResponsiveCssTemplate());
-            fileManager.writeFileContent(new File(projectDir, "script.js"),
-                    templateManager.getResponsiveJsTemplate());
-        }
-    }
-    
-    private void createTailwindProject(File projectDir, String projectName, String templateStyle, FileManager fileManager) throws IOException {
-        // Tailwind via CDN, single index.html and optional script.js
-        fileManager.writeFileContent(new File(projectDir, "index.html"),
-                templateManager.getTailwindCdnHtmlTemplate(projectName));
-        fileManager.writeFileContent(new File(projectDir, "script.js"),
-                "// Tailwind project JavaScript\nconsole.log('Tailwind project loaded!');");
     }
 
     private boolean deleteRecursive(File fileOrDirectory) {

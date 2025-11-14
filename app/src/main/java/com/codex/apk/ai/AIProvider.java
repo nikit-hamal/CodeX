@@ -1,14 +1,7 @@
 package com.codex.apk.ai;
 
 public enum AIProvider {
-    GOOGLE("Google"),
-    ALIBABA("Alibaba"),
-    DEEPINFRA("DeepInfra"),
-    FREE("Free"),
-    COOKIES("Cookies"),
-    OIVSCodeSer0501("OIVSCodeSer0501"),
-    WEWORDLE("WeWordle"),
-    OPENROUTER("OpenRouter");
+    QWEN("Qwen");
 
     private final String displayName;
 

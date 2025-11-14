@@ -105,11 +105,6 @@ public class MainActivity extends AppCompatActivity {
         permissionManager.checkAndRequestPermissions();
 
         aiAssistant = new AIAssistant(this, null, null);
-        if (SettingsActivity.getOpenRouterApiKey(this) != null && !SettingsActivity.getOpenRouterApiKey(this).isEmpty()) {
-            aiAssistant.refreshModelsForProvider(AIProvider.OPENROUTER, (success, message) -> {
-                // Do nothing, this is a background refresh
-            });
-        }
     }
 
     @Override

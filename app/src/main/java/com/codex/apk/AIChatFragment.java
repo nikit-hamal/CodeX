@@ -205,13 +205,7 @@ public class AIChatFragment extends Fragment implements ChatMessageAdapter.OnAiA
 
         uiManager.setText("");
         if (listener != null) {
-            // Directly call assistant with attachments only for COOKIES provider
-            if (aiAssistant != null && aiAssistant.getCurrentModel() != null
-                && aiAssistant.getCurrentModel().getProvider() == com.codex.apk.ai.AIProvider.COOKIES) {
-                aiAssistant.sendMessage(prompt, new ArrayList<>(chatHistory), qwenConversationState, new java.util.ArrayList<>(pendingAttachments));
-            } else {
-                listener.sendAiPrompt(prompt, new ArrayList<>(chatHistory), qwenConversationState);
-            }
+            listener.sendAiPrompt(prompt, new ArrayList<>(chatHistory), qwenConversationState);
             pendingAttachments.clear();
             if (uiManager != null) uiManager.showAttachedFilesPreview(pendingAttachments);
         }
