@@ -72,6 +72,6 @@ public class AiStreamingHandler {
             existing.setContent(partialResponse != null ? partialResponse : existing.getContent());
             existing.setThinkingContent(null);
         }
-        throttler.scheduleUpdate(() -> chatFragment.updateMessage(messagePosition, existing), 1);
+        throttler.scheduleUpdate(() -> chatFragment.updateMessage(messagePosition, existing), 15);
     }
 }

@@ -16,7 +16,7 @@ public class AIAssistant {
     private AIModel currentModel;
     private boolean thinkingModeEnabled = false;
     private boolean webSearchEnabled = false;
-    private boolean agentModeEnabled = false; // New agent mode flag
+    private boolean agentModeEnabled = true; // New agent mode flag
     private List<ToolSpec> enabledTools = new ArrayList<>();
     private AIAssistant.AIActionListener actionListener;
     private File projectDir; // Track project directory for tool operations
