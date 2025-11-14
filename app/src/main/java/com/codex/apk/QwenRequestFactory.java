@@ -1,6 +1,7 @@
 package com.codex.apk;
 
 import com.codex.apk.ai.AIModel;
+import com.codex.apk.ai.StormyPromptManager;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.util.List;
@@ -45,7 +46,7 @@ public class QwenRequestFactory {
 
         JsonArray messages = new JsonArray();
         if (state.getLastParentId() == null) {
-            messages.add(createSystemMessage(enabledTools));
+            messages.add(StormyPromptManager.createSystemMessage());
         }
 
         JsonObject userMsg = createUserMessage(userMessage, model, thinkingModeEnabled, webSearchEnabled);
@@ -94,10 +95,6 @@ public class QwenRequestFactory {
         requestBody.add("messages", messages);
 
         return requestBody;
-    }
-
-    private static JsonObject createSystemMessage(List<ToolSpec> enabledTools) {
-        return PromptManager.createSystemMessage(enabledTools);
     }
 
     private static JsonObject createUserMessage(String message, AIModel model, boolean thinkingModeEnabled, boolean webSearchEnabled) {

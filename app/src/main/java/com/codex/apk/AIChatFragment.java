@@ -38,6 +38,15 @@ public class AIChatFragment extends Fragment implements ChatMessageAdapter.OnAiA
         return fragment;
     }
 
+    public List<ChatMessage> getChatHistory() {
+        return chatHistory;
+    }
+
+    public void updateMessage(int position, ChatMessage message) {
+        chatHistory.set(position, message);
+        chatMessageAdapter.notifyItemChanged(position);
+    }
+
     @Override
     public void onAttach(@NonNull Context context) {
         super.onAttach(context);
@@ -176,5 +185,21 @@ public class AIChatFragment extends Fragment implements ChatMessageAdapter.OnAiA
     public void onCompletion(String summary) {
         ChatMessage completionMessage = new ChatMessage("assistant", summary);
         addMessage(completionMessage);
+    }
+
+    @Override
+    public void onStreamStarted(String requestId) {
+    }
+
+    @Override
+    public void onStreamPartialUpdate(String requestId, String partialResponse, boolean isThinking) {
+    }
+
+    @Override
+    public void onStreamCompleted(String requestId, String response) {
+    }
+
+    @Override
+    public void onStreamError(String requestId, String errorMessage, Throwable throwable) {
     }
 }

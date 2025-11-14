@@ -164,28 +164,7 @@ public class AIChatUIManager {
         View dialogView = LayoutInflater.from(context).inflate(R.layout.bottom_sheet_ai_settings, null);
         aiSettingsDialog.setContentView(dialogView);
 
-        MaterialSwitch switchThinking = dialogView.findViewById(R.id.switch_thinking_mode);
-        MaterialSwitch switchWebSearch = dialogView.findViewById(R.id.switch_web_search);
         MaterialSwitch switchAgent = dialogView.findViewById(R.id.switch_agent_mode);
-        View rowThinking = dialogView.findViewById(R.id.row_thinking_mode);
-
-        ModelCapabilities capabilities = aiAssistant.getCurrentModel().getCapabilities();
-        boolean supportsThinking = capabilities.supportsThinking;
-
-        // Hide entire Thinking row if model doesn't support thinking
-        if (rowThinking != null) {
-            rowThinking.setVisibility(supportsThinking ? View.VISIBLE : View.GONE);
-        }
-
-        switchThinking.setChecked(aiAssistant.isThinkingModeEnabled());
-        switchThinking.setEnabled(supportsThinking);
-        switchThinking.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            aiAssistant.setThinkingModeEnabled(isChecked);
-        });
-
-        switchWebSearch.setChecked(aiAssistant.isWebSearchEnabled());
-        switchWebSearch.setEnabled(capabilities.supportsWebSearch);
-        switchWebSearch.setOnCheckedChangeListener((buttonView, isChecked) -> aiAssistant.setWebSearchEnabled(isChecked));
 
         // Agent mode has no provider capability constraint
         switchAgent.setChecked(aiAssistant.isAgentModeEnabled());
@@ -209,13 +188,6 @@ public class AIChatUIManager {
 
     public void setListeners() {
         buttonAiSend.setOnClickListener(v -> fragment.sendPrompt());
-        layoutModelSelectorCustom.setOnClickListener(v -> showModelPickerDialog(fragment.getAIAssistant()));
-        buttonAiSettings.setOnClickListener(v -> showAiSettingsDialog(fragment.getAIAssistant()));
-        if (buttonAiAttach != null) {
-            buttonAiAttach.setOnClickListener(v -> {
-                fragment.onAttachButtonClicked();
-            });
-        }
         editTextAiPrompt.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
                 fragment.sendPrompt();
@@ -324,7 +296,6 @@ public class AIChatUIManager {
 
                 clear.setOnClickListener(v -> {
                     // Ask fragment to remove
-                    fragment.removePendingAttachmentAt(position);
                 });
 
                 // Tap to preview using an implicit intent

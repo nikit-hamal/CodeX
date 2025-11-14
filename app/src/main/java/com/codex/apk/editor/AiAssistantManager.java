@@ -69,6 +69,12 @@ public class AiAssistantManager implements AIAssistant.AIActionListener {
         }
     }
 
+    public void shutdown() {
+        if (aiAssistant != null) {
+            aiAssistant.shutdown();
+        }
+    }
+
     @Override
     public void onAiError(String errorMessage) {
         activity.runOnUiThread(() -> {
