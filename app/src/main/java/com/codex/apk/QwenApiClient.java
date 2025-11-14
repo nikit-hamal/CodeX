@@ -194,7 +194,7 @@ public class QwenApiClient implements StreamingApiClient {
                 supportedModalities, supportedChatTypes, mcpTools, abilities
             );
 
-            return new AIModel(modelId, displayName, com.codex.apk.ai.AIProvider.ALIBABA, capabilities);
+            return new AIModel(modelId, displayName, com.codex.apk.ai.AIProvider.QWEN, capabilities);
 
         } catch (Exception e) {
             Log.e(TAG, "Error parsing model data", e);

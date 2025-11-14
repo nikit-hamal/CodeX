@@ -128,7 +128,7 @@ Shared concerns:
 - `LocalServerManager`: Spins up local endpoints for preview or callbacks.
 
 ## UI Layer Breakdown
-- **Activities**: `MainActivity`, `EditorActivity`, `SettingsActivity`, `ModelsActivity`, `AboutActivity`, `ApiActivity`, `PreviewActivity`, `DebugActivity`.
+- **Activities**: `MainActivity`, `EditorActivity`, `SettingsActivity`, `ModelsActivity`, `AboutActivity`, `PreviewActivity`, `DebugActivity`.
 - **Fragments**: `AIChatFragment`, `CodeEditorFragment`.
 - **Adapters**: `ChatMessageAdapter`, `FileActionAdapter`, `ProjectsAdapter`, `RecentProjectsAdapter`, `ModelAdapter`, `SimpleSoraTabAdapter`, `SplitDiffAdapter`, `InlineDiffAdapter`, `WebSourcesAdapter`, `editor/adapters/MainPagerAdapter`.
 - **Layout Resources**: Found under `app/src/main/res/layout/`, each adapter references specific item layouts (e.g., `item_chat_message_ai`, `item_plan_step`).

@@ -146,10 +146,16 @@ public class QwenResponseParser {
             Log.d(TAG, "Parsing response: " + responseText.substring(0, Math.min(200, responseText.length())) + "...");
             JsonObject jsonObj = JsonParser.parseString(responseText).getAsJsonObject();
 
+            // Handle potential nesting of file_operation responses
+            JsonObject effectiveObj = jsonObj;
+            if (jsonObj.has("file_operation") && jsonObj.get("file_operation").isJsonObject()) {
+                effectiveObj = jsonObj.getAsJsonObject("file_operation");
+            }
+
             // Plan response (more flexible: any JSON with a "steps" array is considered a plan)
-            if (jsonObj.has("steps") && jsonObj.get("steps").isJsonArray()) {
+            if (effectiveObj.has("steps") && effectiveObj.get("steps").isJsonArray()) {
                 List<PlanStep> steps = new ArrayList<>();
-                JsonArray arr = jsonObj.getAsJsonArray("steps");
+                JsonArray arr = effectiveObj.getAsJsonArray("steps");
                 for (int i = 0; i < arr.size(); i++) {
                     JsonObject s = arr.get(i).getAsJsonObject();
                     String id = s.has("id") ? s.get("id").getAsString() : ("s" + (i + 1));
@@ -157,46 +163,46 @@ public class QwenResponseParser {
                     String kind = s.has("kind") ? s.get("kind").getAsString() : "file";
                     steps.add(new PlanStep(id, title, kind));
                 }
-                String explanation = jsonObj.has("goal") ? ("Plan for: " + jsonObj.get("goal").getAsString()) : "Plan";
+                String explanation = effectiveObj.has("goal") ? effectiveObj.get("goal").getAsString() : "Plan";
                 return new ParsedResponse("plan", new ArrayList<>(), steps, explanation, true);
             }
 
             // Check for multi-operation format first
-            if (jsonObj.has("operations") && jsonObj.get("operations").isJsonArray()) {
+            if (effectiveObj.has("operations") && effectiveObj.get("operations").isJsonArray()) {
                 Log.d(TAG, "Detected 'operations' array, parsing as multi-operation response");
-                return parseFileOperationResponse(jsonObj);
+                return parseFileOperationResponse(effectiveObj);
             }
 
             // Fallback to single-operation if 'operations' is not present
-            if (jsonObj.has("action") && isSingleFileAction(jsonObj.get("action").getAsString())) {
-                Log.d(TAG, "Detected single-operation response with action: " + jsonObj.get("action").getAsString());
+            if (effectiveObj.has("action") && isSingleFileAction(effectiveObj.get("action").getAsString())) {
+                Log.d(TAG, "Detected single-operation response with action: " + effectiveObj.get("action").getAsString());
                 List<FileOperation> operations = new ArrayList<>();
-                String type = jsonObj.get("action").getAsString();
-                String path = jsonObj.has("path") ? jsonObj.get("path").getAsString() : "";
-                String content = jsonObj.has("content") ? jsonObj.get("content").getAsString() : "";
-                String oldPath = jsonObj.has("oldPath") ? jsonObj.get("oldPath").getAsString() : "";
-                String newPath = jsonObj.has("newPath") ? jsonObj.get("newPath").getAsString() : "";
-                String search = jsonObj.has("search") ? jsonObj.get("search").getAsString() : "";
-                String replace = jsonObj.has("replace") ? jsonObj.get("replace").getAsString() : "";
+                String type = effectiveObj.get("action").getAsString();
+                String path = effectiveObj.has("path") ? effectiveObj.get("path").getAsString() : "";
+                String content = effectiveObj.has("content") ? effectiveObj.get("content").getAsString() : "";
+                String oldPath = effectiveObj.has("oldPath") ? effectiveObj.get("oldPath").getAsString() : "";
+                String newPath = effectiveObj.has("newPath") ? effectiveObj.get("newPath").getAsString() : "";
+                String search = effectiveObj.has("search") ? effectiveObj.get("search").getAsString() : "";
+                String replace = effectiveObj.has("replace") ? effectiveObj.get("replace").getAsString() : "";
 
                 // Advanced fields
-                String updateType = jsonObj.has("updateType") ? jsonObj.get("updateType").getAsString() : null;
-                String searchPattern = jsonObj.has("searchPattern") ? jsonObj.get("searchPattern").getAsString() : null;
-                String replaceWith = jsonObj.has("replaceWith") ? jsonObj.get("replaceWith").getAsString() : null;
-                String diffPatch = jsonObj.has("diffPatch") ? jsonObj.get("diffPatch").getAsString() : null;
-                Boolean createBackup = jsonObj.has("createBackup") ? jsonObj.get("createBackup").getAsBoolean() : null;
-                Boolean validateContent = jsonObj.has("validateContent") ? jsonObj.get("validateContent").getAsBoolean() : null;
-                String contentType = jsonObj.has("contentType") ? jsonObj.get("contentType").getAsString() : null;
-                String errorHandling = jsonObj.has("errorHandling") ? jsonObj.get("errorHandling").getAsString() : null;
-                Boolean generateDiff = jsonObj.has("generateDiff") ? jsonObj.get("generateDiff").getAsBoolean() : null;
-                String diffFormat = jsonObj.has("diffFormat") ? jsonObj.get("diffFormat").getAsString() : null;
+                String updateType = effectiveObj.has("updateType") ? effectiveObj.get("updateType").getAsString() : null;
+                String searchPattern = effectiveObj.has("searchPattern") ? effectiveObj.get("searchPattern").getAsString() : null;
+                String replaceWith = effectiveObj.has("replaceWith") ? effectiveObj.get("replaceWith").getAsString() : null;
+                String diffPatch = effectiveObj.has("diffPatch") ? effectiveObj.get("diffPatch").getAsString() : null;
+                Boolean createBackup = effectiveObj.has("createBackup") ? effectiveObj.get("createBackup").getAsBoolean() : null;
+                Boolean validateContent = effectiveObj.has("validateContent") ? effectiveObj.get("validateContent").getAsBoolean() : null;
+                String contentType = effectiveObj.has("contentType") ? effectiveObj.get("contentType").getAsString() : null;
+                String errorHandling = effectiveObj.has("errorHandling") ? effectiveObj.get("errorHandling").getAsString() : null;
+                Boolean generateDiff = effectiveObj.has("generateDiff") ? effectiveObj.get("generateDiff").getAsBoolean() : null;
+                String diffFormat = effectiveObj.has("diffFormat") ? effectiveObj.get("diffFormat").getAsString() : null;
 
-                Integer startLine = jsonObj.has("startLine") ? jsonObj.get("startLine").getAsInt() : null;
-                Integer deleteCount = jsonObj.has("deleteCount") ? jsonObj.get("deleteCount").getAsInt() : null;
+                Integer startLine = effectiveObj.has("startLine") ? effectiveObj.get("startLine").getAsInt() : null;
+                Integer deleteCount = effectiveObj.has("deleteCount") ? effectiveObj.get("deleteCount").getAsInt() : null;
                 List<String> insertLines = null;
-                if (jsonObj.has("insertLines") && jsonObj.get("insertLines").isJsonArray()) {
+                if (effectiveObj.has("insertLines") && effectiveObj.get("insertLines").isJsonArray()) {
                     insertLines = new ArrayList<>();
-                    JsonArray arr = jsonObj.getAsJsonArray("insertLines");
+                    JsonArray arr = effectiveObj.getAsJsonArray("insertLines");
                     for (int i = 0; i < arr.size(); i++) insertLines.add(arr.get(i).getAsString());
                 }
 
@@ -205,40 +211,40 @@ public class QwenResponseParser {
                         updateType, searchPattern, replaceWith, diffPatch, createBackup, validateContent, contentType,
                         errorHandling, generateDiff, diffFormat));
 
-                String explanation = jsonObj.has("explanation") ? jsonObj.get("explanation").getAsString() : "";
+                String explanation = effectiveObj.has("explanation") ? effectiveObj.get("explanation").getAsString() : "";
                 return new ParsedResponse(type, operations, new ArrayList<>(), explanation, true);
             }
 
             // Fallback: check if the root object itself is a single file operation
-            if (jsonObj.has("type") && isSingleFileAction(jsonObj.get("type").getAsString())) {
-                Log.d(TAG, "Detected root object as single file operation with type: " + jsonObj.get("type").getAsString());
+            if (effectiveObj.has("type") && isSingleFileAction(effectiveObj.get("type").getAsString())) {
+                Log.d(TAG, "Detected root object as single file operation with type: " + effectiveObj.get("type").getAsString());
                 List<FileOperation> operations = new ArrayList<>();
-                String type = jsonObj.get("type").getAsString();
-                String path = jsonObj.has("path") ? jsonObj.get("path").getAsString() : "";
-                String content = jsonObj.has("content") ? jsonObj.get("content").getAsString() : "";
-                String oldPath = jsonObj.has("oldPath") ? jsonObj.get("oldPath").getAsString() : "";
-                String newPath = jsonObj.has("newPath") ? jsonObj.get("newPath").getAsString() : "";
-                String search = jsonObj.has("search") ? jsonObj.get("search").getAsString() : "";
-                String replace = jsonObj.has("replace") ? jsonObj.get("replace").getAsString() : "";
+                String type = effectiveObj.get("type").getAsString();
+                String path = effectiveObj.has("path") ? effectiveObj.get("path").getAsString() : "";
+                String content = effectiveObj.has("content") ? effectiveObj.get("content").getAsString() : "";
+                String oldPath = effectiveObj.has("oldPath") ? effectiveObj.get("oldPath").getAsString() : "";
+                String newPath = effectiveObj.has("newPath") ? effectiveObj.get("newPath").getAsString() : "";
+                String search = effectiveObj.has("search") ? effectiveObj.get("search").getAsString() : "";
+                String replace = effectiveObj.has("replace") ? effectiveObj.get("replace").getAsString() : "";
 
                 // Advanced fields
-                String updateType = jsonObj.has("updateType") ? jsonObj.get("updateType").getAsString() : null;
-                String searchPattern = jsonObj.has("searchPattern") ? jsonObj.get("searchPattern").getAsString() : null;
-                String replaceWith = jsonObj.has("replaceWith") ? jsonObj.get("replaceWith").getAsString() : null;
-                String diffPatch = jsonObj.has("diffPatch") ? jsonObj.get("diffPatch").getAsString() : null;
-                Boolean createBackup = jsonObj.has("createBackup") ? jsonObj.get("createBackup").getAsBoolean() : null;
-                Boolean validateContent = jsonObj.has("validateContent") ? jsonObj.get("validateContent").getAsBoolean() : null;
-                String contentType = jsonObj.has("contentType") ? jsonObj.get("contentType").getAsString() : null;
-                String errorHandling = jsonObj.has("errorHandling") ? jsonObj.get("errorHandling").getAsString() : null;
-                Boolean generateDiff = jsonObj.has("generateDiff") ? jsonObj.get("generateDiff").getAsBoolean() : null;
-                String diffFormat = jsonObj.has("diffFormat") ? jsonObj.get("diffFormat").getAsString() : null;
+                String updateType = effectiveObj.has("updateType") ? effectiveObj.get("updateType").getAsString() : null;
+                String searchPattern = effectiveObj.has("searchPattern") ? effectiveObj.get("searchPattern").getAsString() : null;
+                String replaceWith = effectiveObj.has("replaceWith") ? effectiveObj.get("replaceWith").getAsString() : null;
+                String diffPatch = effectiveObj.has("diffPatch") ? effectiveObj.get("diffPatch").getAsString() : null;
+                Boolean createBackup = effectiveObj.has("createBackup") ? effectiveObj.get("createBackup").getAsBoolean() : null;
+                Boolean validateContent = effectiveObj.has("validateContent") ? effectiveObj.get("validateContent").getAsBoolean() : null;
+                String contentType = effectiveObj.has("contentType") ? effectiveObj.get("contentType").getAsString() : null;
+                String errorHandling = effectiveObj.has("errorHandling") ? effectiveObj.get("errorHandling").getAsString() : null;
+                Boolean generateDiff = effectiveObj.has("generateDiff") ? effectiveObj.get("generateDiff").getAsBoolean() : null;
+                String diffFormat = effectiveObj.has("diffFormat") ? effectiveObj.get("diffFormat").getAsString() : null;
 
-                Integer startLine = jsonObj.has("startLine") ? jsonObj.get("startLine").getAsInt() : null;
-                Integer deleteCount = jsonObj.has("deleteCount") ? jsonObj.get("deleteCount").getAsInt() : null;
+                Integer startLine = effectiveObj.has("startLine") ? effectiveObj.get("startLine").getAsInt() : null;
+                Integer deleteCount = effectiveObj.has("deleteCount") ? effectiveObj.get("deleteCount").getAsInt() : null;
                 List<String> insertLines = null;
-                if (jsonObj.has("insertLines") && jsonObj.get("insertLines").isJsonArray()) {
+                if (effectiveObj.has("insertLines") && effectiveObj.get("insertLines").isJsonArray()) {
                     insertLines = new ArrayList<>();
-                    JsonArray arr = jsonObj.getAsJsonArray("insertLines");
+                    JsonArray arr = effectiveObj.getAsJsonArray("insertLines");
                     for (int i = 0; i < arr.size(); i++) insertLines.add(arr.get(i).getAsString());
                 }
 
@@ -247,13 +253,13 @@ public class QwenResponseParser {
                         updateType, searchPattern, replaceWith, diffPatch, createBackup, validateContent, contentType,
                         errorHandling, generateDiff, diffFormat));
 
-                String explanation = jsonObj.has("explanation") ? jsonObj.get("explanation").getAsString() : "";
+                String explanation = effectiveObj.has("explanation") ? effectiveObj.get("explanation").getAsString() : "";
                 return new ParsedResponse(type, operations, new ArrayList<>(), explanation, true);
             }
 
             Log.d(TAG, "Not a recognized file operation response, treating as regular JSON");
             // Fallback for non-file operation JSON
-            return parseRegularJsonResponse(jsonObj);
+            return parseRegularJsonResponse(effectiveObj);
         } catch (JsonParseException e) {
             Log.w(TAG, "Failed to parse JSON response: " + responseText, e);
             return null;
@@ -333,6 +339,17 @@ public class QwenResponseParser {
         }
         
         String explanation = jsonObj.has("explanation") ? jsonObj.get("explanation").getAsString() : "";
+
+        // If explanation is empty, but it's a file_operation with a single op,
+        // and that op has a descriptive field, use that.
+        if (explanation.isEmpty() && operations.size() == 1) {
+            FileOperation op = operations.get(0);
+            if (op.type.equals("createFile")) {
+                explanation = "Create file: " + op.path;
+            } else if (op.type.equals("deleteFile")) {
+                explanation = "Delete file: " + op.path;
+            }
+        }
         
         return new ParsedResponse("file_operation", operations, new ArrayList<>(), explanation, true);
     }
@@ -342,8 +359,9 @@ public class QwenResponseParser {
      */
     private static ParsedResponse parseRegularJsonResponse(JsonObject jsonObj) {
         // For regular JSON responses, we don't have specific operations
+        String explanation = jsonObj.has("explanation") ? jsonObj.get("explanation").getAsString() : jsonObj.toString();
         return new ParsedResponse("json_response", new ArrayList<>(), new ArrayList<>(), 
-                                jsonObj.toString(), true);
+                                explanation, true);
     }
 
     private static boolean isSingleFileAction(String action) {
