@@ -21,45 +21,43 @@ public class QwenResponseParser implements ResponseParser {
             com.codex.apk.ai.ParsedResponse parsed = new com.codex.apk.ai.ParsedResponse();
             parsed.rawResponse = json;
 
-            // Single file operation
-            if (jsonObj.has("action") && jsonObj.get("action").isJsonPrimitive()) {
-                JsonObject singleOpWrapper = new JsonObject();
-                JsonArray opsArray = new JsonArray();
-                opsArray.add(jsonObj);
-                singleOpWrapper.add("operations", opsArray);
+            if (jsonObj.has("action")) {
+                String action = jsonObj.get("action").getAsString();
+                parsed.action = action;
 
-                parsed.fileChanges = toFileActionDetails(parseFileOperationResponse(singleOpWrapper));
-                parsed.action = "file_operation";
-                parsed.isValid = true;
-                return parsed;
-            }
+                if ("plan".equalsIgnoreCase(action)) {
+                    parsed.planSteps = new ArrayList<>();
+                    JsonArray arr = jsonObj.getAsJsonArray("steps");
+                    for (int i = 0; i < arr.size(); i++) {
+                        JsonObject s = arr.get(i).getAsJsonObject();
+                        String id = s.has("id") ? s.get("id").getAsString() : ("s" + (i + 1));
+                        String title = s.has("title") ? s.get("title").getAsString() : ("Step " + (i + 1));
+                        String kind = s.has("kind") ? s.get("kind").getAsString() : "file";
+                        parsed.planSteps.add(new ChatMessage.PlanStep(id, title, kind));
+                    }
+                    parsed.explanation = jsonObj.has("goal") ? ("Plan for: " + jsonObj.get("goal").getAsString()) : "Plan";
+                    parsed.isValid = true;
+                    return parsed;
+                } else if ("file_operation".equalsIgnoreCase(action)) {
+                     parsed.fileChanges = toFileActionDetails(parseFileOperationResponse(jsonObj));
+                     parsed.isValid = true;
+                     return parsed;
+                } else {
+                    // This handles single file operations where the action is e.g. "createFile"
+                    JsonObject singleOpWrapper = new JsonObject();
+                    JsonArray opsArray = new JsonArray();
+                    opsArray.add(jsonObj);
+                    singleOpWrapper.add("operations", opsArray);
 
-            // Plan response
-            if (jsonObj.has("steps") && jsonObj.get("steps").isJsonArray()) {
-                parsed.planSteps = new ArrayList<>();
-                JsonArray arr = jsonObj.getAsJsonArray("steps");
-                for (int i = 0; i < arr.size(); i++) {
-                    JsonObject s = arr.get(i).getAsJsonObject();
-                    String id = s.has("id") ? s.get("id").getAsString() : ("s" + (i + 1));
-                    String title = s.has("title") ? s.get("title").getAsString() : ("Step " + (i + 1));
-                    String kind = s.has("kind") ? s.get("kind").getAsString() : "file";
-                    parsed.planSteps.add(new ChatMessage.PlanStep(id, title, kind));
+                    parsed.fileChanges = toFileActionDetails(parseFileOperationResponse(singleOpWrapper));
+                    parsed.action = "file_operation"; // Normalize action
+                    parsed.isValid = true;
+                    return parsed;
                 }
-                parsed.explanation = jsonObj.has("goal") ? ("Plan for: " + jsonObj.get("goal").getAsString()) : "Plan";
-                parsed.action = "plan";
-                parsed.isValid = true;
-                return parsed;
             }
 
-            // File operations
-            if (jsonObj.has("operations") && jsonObj.get("operations").isJsonArray()) {
-                parsed.fileChanges = toFileActionDetails(parseFileOperationResponse(jsonObj));
-                parsed.action = "file_operation";
-                parsed.isValid = true;
-                return parsed;
-            }
 
-            // Fallback for other JSON
+            // Fallback for other JSON without an action, or structural issues
             parsed.explanation = json;
             parsed.action = "message";
             parsed.isValid = true;
