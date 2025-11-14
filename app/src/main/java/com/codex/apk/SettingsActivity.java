@@ -259,4 +259,8 @@ public class SettingsActivity extends AppCompatActivity {
     public static boolean isDefaultWordWrap(android.content.Context context) {
         return getPreferences(context).getBoolean("default_word_wrap", true);
     }
+
+    public static boolean isAgentModeEnabled(android.content.Context context) {
+        return getPreferences(context).getBoolean("agent_mode_enabled", true);
+    }
 }

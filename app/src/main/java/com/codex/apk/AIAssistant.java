@@ -86,8 +86,55 @@ public class AIAssistant {
         }
     }
 
+    public void sendMessage(String message, ResponseCallback callback) {
+        // Simple message send for workflow orchestrator
+        if (apiClient instanceof StreamingApiClient) {
+            StreamingApiClient.MessageRequest request = new StreamingApiClient.MessageRequest.Builder()
+                .message(message)
+                .history(new ArrayList<>())
+                .model(currentModel)
+                .conversationState(null)
+                .thinkingModeEnabled(thinkingModeEnabled)
+                .webSearchEnabled(webSearchEnabled)
+                .enabledTools(enabledTools)
+                .attachments(new ArrayList<>())
+                .build();
+
+            ((StreamingApiClient) apiClient).sendMessageStreaming(request, new StreamingApiClient.StreamListener() {
+                private StringBuilder fullResponse = new StringBuilder();
+
+                @Override
+                public void onStreamUpdate(String partialResponse, boolean isThinking) {
+                    fullResponse.append(partialResponse);
+                }
+
+                @Override
+                public void onStreamComplete() {
+                    callback.onSuccess(fullResponse.toString());
+                }
+
+                @Override
+                public void onStreamError(String error) {
+                    callback.onError(error);
+                }
+
+                @Override
+                public void onConversationStateUpdated(QwenConversationState state) {
+                    // Ignore for simple workflow
+                }
+            });
+        } else {
+            callback.onError("API client not available");
+        }
+    }
+
     public interface RefreshCallback {
         void onRefreshComplete(boolean success, String message);
+    }
+
+    public interface ResponseCallback {
+        void onSuccess(String response);
+        void onError(String error);
     }
 
     public interface AIActionListener {

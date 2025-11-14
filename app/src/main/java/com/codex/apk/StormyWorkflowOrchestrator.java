@@ -45,7 +45,7 @@ public class StormyWorkflowOrchestrator {
      */
     public static class ExecutionStep {
         public final StormyResponseParser.StormyParsedResponse response;
-        public final JsonObject toolResult; // null if not a tool_use
+        public JsonObject toolResult; // null if not a tool_use (non-final to allow update after execution)
         public final long timestamp;
 
         public ExecutionStep(StormyResponseParser.StormyParsedResponse response, JsonObject toolResult) {

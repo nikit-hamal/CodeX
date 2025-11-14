@@ -6,6 +6,7 @@ import com.codex.apk.util.FileOps;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -136,7 +137,7 @@ public class StormyToolExecutor {
             }
 
             // Write the file
-            FileOps.writeFile(targetFile, content);
+            Files.write(targetFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
             result.addProperty("ok", true);
             result.addProperty("message", "Successfully wrote " + content.length() + " characters to " + path);
@@ -207,7 +208,7 @@ public class StormyToolExecutor {
                                currentContent.substring(index + block.search.length());
 
             // Write the modified content
-            FileOps.writeFile(targetFile, newContent);
+            Files.write(targetFile.toPath(), newContent.getBytes(StandardCharsets.UTF_8));
 
             // Calculate diff statistics
             int oldLines = currentContent.split("\n").length;
