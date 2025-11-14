@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import java.io.File;
@@ -152,7 +153,7 @@ public class StormyWorkflowOrchestrator {
         callback.onWorkflowStarted();
 
         // Add user message to history
-        ChatMessage userMessage = new ChatMessage(ChatMessage.ROLE_USER, userRequest, null);
+        ChatMessage userMessage = new ChatMessage(ChatMessage.SENDER_USER, userRequest, System.currentTimeMillis());
         conversationHistory.add(userMessage);
 
         // Send initial request to AI
@@ -160,7 +161,7 @@ public class StormyWorkflowOrchestrator {
             @Override
             public void onResponse(String responseText) {
                 // Add AI response to history
-                ChatMessage aiMessage = new ChatMessage(ChatMessage.ROLE_ASSISTANT, responseText, null);
+                ChatMessage aiMessage = new ChatMessage(ChatMessage.SENDER_AI, responseText, System.currentTimeMillis());
                 conversationHistory.add(aiMessage);
 
                 processAIResponse(responseText);
@@ -187,7 +188,7 @@ public class StormyWorkflowOrchestrator {
         isRunning = true;
 
         // Add user answer to history
-        ChatMessage userMessage = new ChatMessage(ChatMessage.ROLE_USER, answer, null);
+        ChatMessage userMessage = new ChatMessage(ChatMessage.SENDER_USER, answer, System.currentTimeMillis());
         conversationHistory.add(userMessage);
 
         // Send user answer to AI
@@ -195,7 +196,7 @@ public class StormyWorkflowOrchestrator {
             @Override
             public void onResponse(String responseText) {
                 // Add AI response to history
-                ChatMessage aiMessage = new ChatMessage(ChatMessage.ROLE_ASSISTANT, responseText, null);
+                ChatMessage aiMessage = new ChatMessage(ChatMessage.SENDER_AI, responseText, System.currentTimeMillis());
                 conversationHistory.add(aiMessage);
 
                 processAIResponse(responseText);
@@ -381,7 +382,7 @@ public class StormyWorkflowOrchestrator {
             "Please propose an alternative approach or ask for clarification.";
 
         // Add rejection to conversation history
-        ChatMessage rejectionChatMessage = new ChatMessage(ChatMessage.ROLE_USER, rejectionMessage, null);
+        ChatMessage rejectionChatMessage = new ChatMessage(ChatMessage.SENDER_USER, rejectionMessage, System.currentTimeMillis());
         conversationHistory.add(rejectionChatMessage);
 
         // Send to AI
@@ -389,7 +390,7 @@ public class StormyWorkflowOrchestrator {
             @Override
             public void onResponse(String responseText) {
                 // Add AI response to history
-                ChatMessage aiMessage = new ChatMessage(ChatMessage.ROLE_ASSISTANT, responseText, null);
+                ChatMessage aiMessage = new ChatMessage(ChatMessage.SENDER_AI, responseText, System.currentTimeMillis());
                 conversationHistory.add(aiMessage);
 
                 processAIResponse(responseText);
@@ -458,7 +459,7 @@ public class StormyWorkflowOrchestrator {
 
         // Add tool result to conversation history as a user message
         // (since the AI needs to see it as input for the next response)
-        ChatMessage toolResultChatMessage = new ChatMessage(ChatMessage.ROLE_USER, toolResultMessage, null);
+        ChatMessage toolResultChatMessage = new ChatMessage(ChatMessage.SENDER_USER, toolResultMessage, System.currentTimeMillis());
         conversationHistory.add(toolResultChatMessage);
 
         // Send to AI
@@ -466,7 +467,7 @@ public class StormyWorkflowOrchestrator {
             @Override
             public void onResponse(String responseText) {
                 // Add AI response to history
-                ChatMessage aiMessage = new ChatMessage(ChatMessage.ROLE_ASSISTANT, responseText, null);
+                ChatMessage aiMessage = new ChatMessage(ChatMessage.SENDER_AI, responseText, System.currentTimeMillis());
                 conversationHistory.add(aiMessage);
 
                 processAIResponse(responseText);
@@ -496,7 +497,7 @@ public class StormyWorkflowOrchestrator {
             "Please analyze the error and try a different approach or ask for clarification.";
 
         // Add error to conversation history
-        ChatMessage errorChatMessage = new ChatMessage(ChatMessage.ROLE_USER, errorMessage, null);
+        ChatMessage errorChatMessage = new ChatMessage(ChatMessage.SENDER_USER, errorMessage, System.currentTimeMillis());
         conversationHistory.add(errorChatMessage);
 
         // Send to AI
@@ -504,7 +505,7 @@ public class StormyWorkflowOrchestrator {
             @Override
             public void onResponse(String responseText) {
                 // Add AI response to history
-                ChatMessage aiMessage = new ChatMessage(ChatMessage.ROLE_ASSISTANT, responseText, null);
+                ChatMessage aiMessage = new ChatMessage(ChatMessage.SENDER_AI, responseText, System.currentTimeMillis());
                 conversationHistory.add(aiMessage);
 
                 processAIResponse(responseText);
