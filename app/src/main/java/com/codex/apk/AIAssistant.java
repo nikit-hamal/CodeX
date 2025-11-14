@@ -62,7 +62,7 @@ public class AIAssistant {
                 finalMessage = "File `" + fileName + "`:\n```\n" + fileContent + "\n```\n\n" + message;
             }
 
-            String system = agentModeEnabled ? PromptManager.getDefaultFileOpsPrompt() : PromptManager.getDefaultGeneralPrompt();
+            String system = StormyPromptManager.getSystemPrompt();
             if (system != null && !system.isEmpty()) {
                 finalMessage = system + "\n\n" + finalMessage;
             }

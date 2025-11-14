@@ -27,6 +27,7 @@ import com.codex.apk.editor.adapters.MainPagerAdapter;
 import com.codex.apk.SimpleSoraTabAdapter;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
+import com.google.gson.JsonObject;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,7 +40,8 @@ import java.util.concurrent.Executors;
 // but delegates the actual logic to the new manager classes.
 public class EditorActivity extends AppCompatActivity implements
         CodeEditorFragment.CodeEditorFragmentListener,
-        AIChatFragment.AIChatFragmentListener {
+        AIChatFragment.AIChatFragmentListener,
+        AIAssistant.AIActionListener {
 
     private static final String TAG = "EditorActivity";
 
@@ -114,6 +116,7 @@ public class EditorActivity extends AppCompatActivity implements
         tabManager = new TabManager(this, fileManager, dialogHelper, viewModel.getOpenTabs());
         // Pass projectDir to AiAssistantManager for FileWatcher initialization
         aiAssistantManager = new AiAssistantManager(this, projectDir, projectName, fileManager, executorService);
+        aiAssistantManager.getAIAssistant().setActionListener(this);
 
         // Setup components using managers
         uiManager.initializeViews();
@@ -356,6 +359,7 @@ public class EditorActivity extends AppCompatActivity implements
     @Override
     public void sendAiPrompt(String userPrompt, List<ChatMessage> chatHistory, QwenConversationState qwenState) {
         this.lastUserPrompt = userPrompt;
+        aiChatFragment.showThinking();
         tabManager.getActiveTabItem(); // Ensure active tab is retrieved before sending prompt
         aiAssistantManager.sendAiPrompt(userPrompt, chatHistory, qwenState, tabManager.getActiveTabItem()); // Delegate to AiAssistantManager
     }
@@ -366,18 +370,46 @@ public class EditorActivity extends AppCompatActivity implements
     // AIActionListener will then update the AIChatFragment.
 
     @Override
-    public void onAiAcceptActions(int messagePosition, ChatMessage message) {
-        aiAssistantManager.onAiAcceptActions(messagePosition, message); // Delegate to AiAssistantManager
+    public void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions, List<ChatMessage.FileActionDetail> proposedFileChanges, String aiModelDisplayName) {
+        StormyResponseParser.StormyAction action = StormyResponseParser.parse(rawAiResponseJson);
+        if (action != null) {
+            executorService.execute(() -> {
+                JsonObject result = ToolExecutor.execute(projectDir, action.toolCode, action.parameters);
+                runOnUiThread(() -> {
+                    ChatMessage aiMessage = new ChatMessage(ChatMessage.SENDER_AI, result.toString(), System.currentTimeMillis());
+                    aiChatFragment.addMessage(aiMessage);
+                    fileTreeManager.rebuildFileTree();
+                });
+            });
+        }
     }
 
     @Override
-    public void onAiDiscardActions(int messagePosition, ChatMessage message) {
-        aiAssistantManager.onAiDiscardActions(messagePosition, message); // Delegate to AiAssistantManager
+    public void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions, List<ChatMessage.FileActionDetail> proposedFileChanges, List<ChatMessage.PlanStep> planSteps, String aiModelDisplayName) {
+        onAiActionsProcessed(rawAiResponseJson, explanation, suggestions, proposedFileChanges, aiModelDisplayName);
     }
 
     @Override
-    public void onReapplyActions(int messagePosition, ChatMessage message) { // Added this method implementation
-        aiAssistantManager.onReapplyActions(messagePosition, message); // FIX: Delegate to AiAssistantManager
+    public void onAiError(String errorMessage) {
+        runOnUiThread(() -> {
+            ChatMessage aiMessage = new ChatMessage(ChatMessage.SENDER_AI, "Error: " + errorMessage, System.currentTimeMillis());
+            aiChatFragment.addMessage(aiMessage);
+        });
+    }
+
+    @Override
+    public void onAiRequestStarted() {
+        // "Thinking" message is already shown
+    }
+
+    @Override
+    public void onAiStreamUpdate(String partialResponse, boolean isThinking) {
+        // Not used
+    }
+
+    @Override
+    public void onAiRequestCompleted() {
+        // Not used
     }
 
     @Override
@@ -392,15 +424,6 @@ public class EditorActivity extends AppCompatActivity implements
         }
     }
 
-    @Override
-    public void onPlanAcceptClicked(int messagePosition, ChatMessage message) {
-        aiAssistantManager.acceptPlan(messagePosition, message);
-    }
-
-    @Override
-    public void onPlanDiscardClicked(int messagePosition, ChatMessage message) {
-        aiAssistantManager.discardPlan(messagePosition, message);
-    }
 
     // Public methods for managers to call back to EditorActivity for UI updates or core actions
     public void showToast(String message) {
