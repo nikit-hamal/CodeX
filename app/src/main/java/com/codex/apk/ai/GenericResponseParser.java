@@ -18,7 +18,7 @@ public class GenericResponseParser implements ResponseParser {
         try {
             // First, try to parse the entire string as a JSON object
             QwenResponseParser.ParsedResponse parsed = gson.fromJson(rawResponse, QwenResponseParser.ParsedResponse.class);
-            if (parsed != null && (parsed.explanation != null || parsed.planSteps != null || parsed.proposedFileChanges != null)) {
+            if (parsed != null && (parsed.explanation != null || parsed.planSteps != null)) {
                 parsed.isValid = true;
                 return parsed;
             }
@@ -34,8 +34,6 @@ public class GenericResponseParser implements ResponseParser {
         response.action = "message";
         response.explanation = text;
         response.planSteps = Collections.emptyList();
-        response.proposedFileChanges = Collections.emptyList();
-        response.suggestions = Collections.emptyList();
         response.isValid = true;
         response.rawResponse = text;
         return response;

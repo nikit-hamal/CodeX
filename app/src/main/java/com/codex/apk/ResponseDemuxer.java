@@ -53,7 +53,7 @@ public final class ResponseDemuxer {
                     }
                 } catch (Exception ignore) {}
 
-                QwenResponseParser.ParsedResponse parsed = QwenResponseParser.parseResponse(jsonToParse);
+                QwenResponseParser.ParsedResponse parsed = new QwenResponseParser().parse(jsonToParse);
                 if (parsed != null && parsed.isValid) {
                     if ("plan".equals(parsed.action) && parsed.planSteps != null && !parsed.planSteps.isEmpty()) {
                         List<ChatMessage.PlanStep> planSteps = QwenResponseParser.toPlanSteps(parsed);

@@ -250,31 +250,22 @@ public class QwenStreamProcessor {
         }
 
         if (jsonToParse != null) {
-            QwenResponseParser.parseResponseAsync(jsonToParse, rawResponse, new QwenResponseParser.ParseResultListener() {
-                @Override
-                public void onParseSuccess(QwenResponseParser.ParsedResponse parsed) {
-                    if (parsed != null && parsed.isValid) {
-                        if ("plan".equals(parsed.action)) {
-                            List<ChatMessage.PlanStep> planSteps = QwenResponseParser.toPlanSteps(parsed);
-                            actionListener.onAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), new ArrayList<>(), planSteps, model.getDisplayName());
-                        } else if (parsed.action != null && parsed.action.contains("file")) {
-                            List<ChatMessage.FileActionDetail> details = QwenResponseParser.toFileActionDetails(parsed);
-                            enrichFileActionDetails(details);
-                            notifyAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), details, thinkingContent, webSources);
-                        } else {
-                            notifyAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
-                        }
-                    } else {
-                        notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
-                    }
+            QwenResponseParser parser = new QwenResponseParser();
+            QwenResponseParser.ParsedResponse parsed = parser.parse(jsonToParse);
+            if (parsed != null && parsed.isValid) {
+                if ("plan".equals(parsed.action)) {
+                    List<ChatMessage.PlanStep> planSteps = QwenResponseParser.toPlanSteps(parsed);
+                    actionListener.onAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), new ArrayList<>(), planSteps, model.getDisplayName());
+                } else if (parsed.action != null && parsed.action.contains("file")) {
+                    List<ChatMessage.FileActionDetail> details = QwenResponseParser.toFileActionDetails(parsed);
+                    enrichFileActionDetails(details);
+                    notifyAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), details, thinkingContent, webSources);
+                } else {
+                    notifyAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
                 }
-
-                @Override
-                public void onParseFailed() {
-                    Log.e(TAG, "Failed to parse extracted JSON, treating as text.");
-                    notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
-                }
-            });
+            } else {
+                notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
+            }
         } else {
             notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
         }

@@ -331,22 +331,18 @@ public class QwenApiClient implements StreamingApiClient {
             } catch (Exception ignore) {}
         }
 
-        QwenResponseParser.parseResponseAsync(completedText, rawSse, new QwenResponseParser.ParseResultListener() {
-            @Override
-            public void onParseSuccess(QwenResponseParser.ParsedResponse parsedResponse) {
-                listener.onStreamCompleted(request.getRequestId(), parsedResponse);
-            }
-
-            @Override
-            public void onParseFailed() {
-                QwenResponseParser.ParsedResponse fallback = new QwenResponseParser.ParsedResponse();
-                fallback.action = "message";
-                fallback.explanation = completedText;
-                fallback.rawResponse = rawSse;
-                fallback.isValid = true;
-                listener.onStreamCompleted(request.getRequestId(), fallback);
-            }
-        });
+        QwenResponseParser parser = new QwenResponseParser();
+        QwenResponseParser.ParsedResponse parsedResponse = parser.parse(completedText);
+        if (parsedResponse != null) {
+            listener.onStreamCompleted(request.getRequestId(), parsedResponse);
+        } else {
+            QwenResponseParser.ParsedResponse fallback = new QwenResponseParser.ParsedResponse();
+            fallback.action = "message";
+            fallback.explanation = completedText;
+            fallback.rawResponse = rawSse;
+            fallback.isValid = true;
+            listener.onStreamCompleted(request.getRequestId(), fallback);
+        }
     }
 
     private void performToolContinuation(JsonArray toolCalls, MessageRequest originalRequest, QwenConversationState state, StreamListener listener) {

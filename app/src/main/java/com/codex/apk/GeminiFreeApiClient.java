@@ -372,7 +372,7 @@ public class GeminiFreeApiClient implements StreamingApiClient {
 
         if (jsonToParse != null) {
             try {
-                QwenResponseParser.ParsedResponse parsed = QwenResponseParser.parseResponse(jsonToParse);
+                QwenResponseParser.ParsedResponse parsed = new QwenResponseParser().parse(jsonToParse);
                 if (parsed != null && parsed.isValid) {
                     if ("plan".equals(parsed.action) && parsed.planSteps != null && !parsed.planSteps.isEmpty()) {
                         List<ChatMessage.PlanStep> planSteps = QwenResponseParser.toPlanSteps(parsed);

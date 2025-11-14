@@ -164,7 +164,7 @@ public class AIAssistant {
     public void shutdown() {}
 
     public ResponseParser getResponseParser(AIModel model) {
-        if (model.getFamily() == AIProvider.ALIBABA) {
+        if (model.getProvider() == AIProvider.ALIBABA) {
             return new QwenResponseParser();
         }
         return new GenericResponseParser();

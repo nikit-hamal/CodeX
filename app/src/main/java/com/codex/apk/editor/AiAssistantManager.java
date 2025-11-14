@@ -364,15 +364,16 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
 
             if ((effectiveProposedFileChanges == null || effectiveProposedFileChanges.isEmpty()) && !isPlan) {
                 try {
+                    com.codex.apk.ai.ResponseParser parser = aiAssistant.getResponseParser(aiAssistant.getCurrentModel());
                     QwenResponseParser.ParsedResponse parsed = null;
                     if (rawAiResponseJson != null) {
                         String normalized = AiResponseUtils.extractJsonFromContent(rawAiResponseJson);
                         String toParse = normalized != null ? normalized : rawAiResponseJson;
-                        if (toParse != null) parsed = QwenResponseParser.parseResponse(toParse);
+                        if (toParse != null) parsed = parser.parse(toParse);
                     }
                     if (parsed == null && explanation != null && !explanation.isEmpty()) {
                         String exNorm = AiResponseUtils.extractJsonFromContent(explanation);
-                        if (exNorm != null) parsed = QwenResponseParser.parseResponse(exNorm);
+                        if (exNorm != null) parsed = parser.parse(exNorm);
                     }
                     if (parsed != null && parsed.action != null && parsed.action.contains("file")) {
                         effectiveProposedFileChanges = QwenResponseParser.toFileActionDetails(parsed);
