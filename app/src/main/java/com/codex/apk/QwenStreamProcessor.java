@@ -438,8 +438,20 @@ public class QwenStreamProcessor {
     }
 
     public static boolean isErrorChunk(JsonObject chunk) {
-        // Simple check for now, can be expanded
-        return chunk.has("error");
+        if (chunk == null) return false;
+        // Standard SSE error format
+        if (chunk.has("error")) return true;
+
+        // Qwen-specific rate limit error format
+        if (chunk.has("success") && !chunk.get("success").getAsBoolean()) {
+            if (chunk.has("data") && chunk.get("data").isJsonObject()) {
+                JsonObject data = chunk.getAsJsonObject("data");
+                if (data.has("code") && "RateLimited".equals(data.get("code").getAsString())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public static void processChunk(JsonObject data, QwenConversationState state, StringBuilder finalText, PartialUpdateCallback callback, AIAssistant.AIActionListener listener) {

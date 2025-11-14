@@ -182,12 +182,22 @@ public class DeepInfraApiClient implements StreamingApiClient {
                     }
                     @Override public void onComplete() {
                         activeStreams.remove(request.getRequestId());
-                        QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
-                        finalResponse.action = "message";
-                        finalResponse.explanation = finalText.toString();
-                        finalResponse.rawResponse = rawSse.toString();
-                        finalResponse.isValid = true;
-                        listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                        GenericResponseParser.parseResponseAsync(finalText.toString(), rawSse.toString(), new GenericResponseParser.ParseResultListener() {
+                            @Override
+                            public void onParseSuccess(QwenResponseParser.ParsedResponse response) {
+                                listener.onStreamCompleted(request.getRequestId(), response);
+                            }
+
+                            @Override
+                            public void onParseFailed(String rawText) {
+                                QwenResponseParser.ParsedResponse finalResponse = new QwenResponseParser.ParsedResponse();
+                                finalResponse.action = "message";
+                                finalResponse.explanation = rawText;
+                                finalResponse.rawResponse = rawSse.toString();
+                                finalResponse.isValid = true;
+                                listener.onStreamCompleted(request.getRequestId(), finalResponse);
+                            }
+                        });
                     }
                 });
 

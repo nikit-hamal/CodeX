@@ -234,7 +234,7 @@ public class QwenApiClient implements StreamingApiClient {
 
         final StringBuilder finalText = new StringBuilder();
         final StringBuilder rawSse = new StringBuilder();
-        final boolean[] retriedJsonError = new boolean[]{false};
+        final boolean[] retriedRateLimitError = new boolean[]{false};
         final boolean[] retriedHttpError = new boolean[]{false};
         final boolean[] aborted = new boolean[]{false};
 
@@ -248,15 +248,22 @@ public class QwenApiClient implements StreamingApiClient {
                 rawSse.append("data: ").append(chunk.toString()).append('\n');
 
                 if (QwenStreamProcessor.isErrorChunk(chunk)) {
-                    if (!retriedJsonError[0]) {
-                        retriedJsonError[0] = true;
+                    if (!retriedRateLimitError[0]) {
+                        retriedRateLimitError[0] = true;
                         aborted[0] = true;
-                        try { midTokenManager.ensureMidToken(true); } catch (Exception ignore) {}
+                        Log.d(TAG, "Rate limit error detected, forcing midtoken refresh and retrying.");
+                        // Force refresh the midtoken and retry the request.
                         new Thread(() -> {
-                            try { performStreamingCompletion(request, state, listener); } catch (IOException ignore) {}
+                            try {
+                                midTokenManager.ensureMidToken(true); // Force refresh
+                                performStreamingCompletion(request, state, listener);
+                            } catch (IOException e) {
+                                listener.onStreamError(request.getRequestId(), "Failed to retry after rate limit", e);
+                            }
                         }).start();
-                        return;
+                        return; // Stop processing the current stream
                     } else {
+                        // If we've already retried and failed, report the error.
                         listener.onStreamError(request.getRequestId(), "Qwen API Error after retry", null);
                         return;
                     }
