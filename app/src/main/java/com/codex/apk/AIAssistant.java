@@ -87,13 +87,17 @@ public class AIAssistant {
     }
 
     public void sendMessage(String message, ResponseCallback callback) {
-        // Simple message send for workflow orchestrator
+        sendMessage(message, new ArrayList<>(), null, callback);
+    }
+
+    public void sendMessage(String message, List<ChatMessage> chatHistory, QwenConversationState qwenState, ResponseCallback callback) {
+        // Simple message send for workflow orchestrator with conversation context
         if (apiClient instanceof StreamingApiClient) {
             StreamingApiClient.MessageRequest request = new StreamingApiClient.MessageRequest.Builder()
                 .message(message)
-                .history(new ArrayList<>())
+                .history(chatHistory != null ? chatHistory : new ArrayList<>())
                 .model(currentModel)
-                .conversationState(null)
+                .conversationState(qwenState)
                 .thinkingModeEnabled(thinkingModeEnabled)
                 .webSearchEnabled(webSearchEnabled)
                 .enabledTools(enabledTools)

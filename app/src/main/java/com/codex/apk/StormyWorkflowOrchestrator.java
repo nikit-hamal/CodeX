@@ -39,6 +39,8 @@ public class StormyWorkflowOrchestrator {
     private boolean isRunning = false;
     private int iterationCount = 0;
     private List<ExecutionStep> executionHistory = new ArrayList<>();
+    private List<ChatMessage> conversationHistory = new ArrayList<>();
+    private QwenConversationState conversationState = null;
 
     /**
      * Represents a single step in the workflow execution
@@ -144,13 +146,23 @@ public class StormyWorkflowOrchestrator {
         isRunning = true;
         iterationCount = 0;
         executionHistory.clear();
+        conversationHistory.clear();
+        conversationState = new QwenConversationState();
 
         callback.onWorkflowStarted();
+
+        // Add user message to history
+        ChatMessage userMessage = new ChatMessage(ChatMessage.ROLE_USER, userRequest, null);
+        conversationHistory.add(userMessage);
 
         // Send initial request to AI
         sendToAI(userRequest, new AIResponseHandler() {
             @Override
             public void onResponse(String responseText) {
+                // Add AI response to history
+                ChatMessage aiMessage = new ChatMessage(ChatMessage.ROLE_ASSISTANT, responseText, null);
+                conversationHistory.add(aiMessage);
+
                 processAIResponse(responseText);
             }
 
@@ -174,10 +186,18 @@ public class StormyWorkflowOrchestrator {
 
         isRunning = true;
 
+        // Add user answer to history
+        ChatMessage userMessage = new ChatMessage(ChatMessage.ROLE_USER, answer, null);
+        conversationHistory.add(userMessage);
+
         // Send user answer to AI
         sendToAI(answer, new AIResponseHandler() {
             @Override
             public void onResponse(String responseText) {
+                // Add AI response to history
+                ChatMessage aiMessage = new ChatMessage(ChatMessage.ROLE_ASSISTANT, responseText, null);
+                conversationHistory.add(aiMessage);
+
                 processAIResponse(responseText);
             }
 
@@ -356,17 +376,22 @@ public class StormyWorkflowOrchestrator {
         Log.d(TAG, "Sending tool rejection to AI");
 
         // Build rejection message
-        JsonObject rejectionMsg = new JsonObject();
-        rejectionMsg.addProperty("role", "user");
-        rejectionMsg.addProperty("content",
-            "I've rejected the proposed action: " + StormyResponseParser.getToolDescription(response) + "\n" +
+        String rejectionMessage = "I've rejected the proposed action: " + StormyResponseParser.getToolDescription(response) + "\n" +
             "Reason: " + reason + "\n\n" +
-            "Please propose an alternative approach or ask for clarification.");
+            "Please propose an alternative approach or ask for clarification.";
+
+        // Add rejection to conversation history
+        ChatMessage rejectionChatMessage = new ChatMessage(ChatMessage.ROLE_USER, rejectionMessage, null);
+        conversationHistory.add(rejectionChatMessage);
 
         // Send to AI
-        sendToAI(rejectionMsg.toString(), new AIResponseHandler() {
+        sendToAI(rejectionMessage, new AIResponseHandler() {
             @Override
             public void onResponse(String responseText) {
+                // Add AI response to history
+                ChatMessage aiMessage = new ChatMessage(ChatMessage.ROLE_ASSISTANT, responseText, null);
+                conversationHistory.add(aiMessage);
+
                 processAIResponse(responseText);
             }
 
@@ -387,16 +412,63 @@ public class StormyWorkflowOrchestrator {
 
         Log.d(TAG, "Sending tool result to AI and continuing");
 
-        // Build tool result message
-        JsonObject toolResultMsg = new JsonObject();
-        toolResultMsg.addProperty("role", "tool");
-        toolResultMsg.addProperty("tool_name", response.tool);
-        toolResultMsg.add("result", result);
+        // Build tool result message in a format the AI can understand
+        StringBuilder toolResultText = new StringBuilder();
+        toolResultText.append("Tool execution result:\n");
+        toolResultText.append("Tool: ").append(response.tool).append("\n");
+        toolResultText.append("Status: ").append(result.has("ok") && result.get("ok").getAsBoolean() ? "SUCCESS" : "FAILED").append("\n");
+
+        if (result.has("message")) {
+            toolResultText.append("Message: ").append(result.get("message").getAsString()).append("\n");
+        }
+
+        // Include relevant result data based on tool type
+        if (response.tool.equals("list_files") && result.has("files")) {
+            toolResultText.append("\nFiles:\n");
+            JsonArray files = result.getAsJsonArray("files");
+            int count = Math.min(files.size(), 50); // Limit output
+            for (int i = 0; i < count; i++) {
+                JsonObject file = files.get(i).getAsJsonObject();
+                String type = file.get("type").getAsString();
+                String path = file.get("path").getAsString();
+                toolResultText.append("  ").append(type.equals("directory") ? "[DIR]  " : "[FILE] ").append(path).append("\n");
+            }
+            if (files.size() > count) {
+                toolResultText.append("  ... and ").append(files.size() - count).append(" more\n");
+            }
+        } else if (response.tool.equals("read_file") && result.has("content")) {
+            toolResultText.append("\nContent:\n");
+            toolResultText.append(result.get("content").getAsString());
+        } else if (response.tool.equals("search_files") && result.has("matches")) {
+            toolResultText.append("\nMatches:\n");
+            JsonArray matches = result.getAsJsonArray("matches");
+            for (int i = 0; i < Math.min(matches.size(), 20); i++) {
+                JsonObject match = matches.get(i).getAsJsonObject();
+                toolResultText.append("  ").append(match.get("file").getAsString())
+                    .append(":").append(match.get("line").getAsInt())
+                    .append(" - ").append(match.get("content").getAsString()).append("\n");
+            }
+        } else if (result.has("error")) {
+            toolResultText.append("\nError: ").append(result.get("error").getAsString()).append("\n");
+        }
+
+        toolResultText.append("\nPlease continue with the next step to complete the task.");
+
+        String toolResultMessage = toolResultText.toString();
+
+        // Add tool result to conversation history as a user message
+        // (since the AI needs to see it as input for the next response)
+        ChatMessage toolResultChatMessage = new ChatMessage(ChatMessage.ROLE_USER, toolResultMessage, null);
+        conversationHistory.add(toolResultChatMessage);
 
         // Send to AI
-        sendToAI(toolResultMsg.toString(), new AIResponseHandler() {
+        sendToAI(toolResultMessage, new AIResponseHandler() {
             @Override
             public void onResponse(String responseText) {
+                // Add AI response to history
+                ChatMessage aiMessage = new ChatMessage(ChatMessage.ROLE_ASSISTANT, responseText, null);
+                conversationHistory.add(aiMessage);
+
                 processAIResponse(responseText);
             }
 
@@ -417,17 +489,24 @@ public class StormyWorkflowOrchestrator {
 
         Log.d(TAG, "Sending tool error to AI");
 
-        // Build error message
-        JsonObject errorMsg = new JsonObject();
-        errorMsg.addProperty("role", "tool");
-        errorMsg.addProperty("tool_name", response.tool);
-        errorMsg.add("result", result);
-        errorMsg.addProperty("error", result.get("error").getAsString());
+        // Build error message in human-readable format
+        String errorMessage = "Tool execution failed:\n" +
+            "Tool: " + response.tool + "\n" +
+            "Error: " + result.get("error").getAsString() + "\n\n" +
+            "Please analyze the error and try a different approach or ask for clarification.";
+
+        // Add error to conversation history
+        ChatMessage errorChatMessage = new ChatMessage(ChatMessage.ROLE_USER, errorMessage, null);
+        conversationHistory.add(errorChatMessage);
 
         // Send to AI
-        sendToAI(errorMsg.toString(), new AIResponseHandler() {
+        sendToAI(errorMessage, new AIResponseHandler() {
             @Override
             public void onResponse(String responseText) {
+                // Add AI response to history
+                ChatMessage aiMessage = new ChatMessage(ChatMessage.ROLE_ASSISTANT, responseText, null);
+                conversationHistory.add(aiMessage);
+
                 processAIResponse(responseText);
             }
 
@@ -454,14 +533,12 @@ public class StormyWorkflowOrchestrator {
     }
 
     /**
-     * Send a message to the AI
+     * Send a message to the AI with full conversation context
      */
     private void sendToAI(String message, AIResponseHandler handler) {
-        // This is a simplified interface - actual implementation would use AIAssistant
-        // For now, we'll assume AIAssistant has a method like this
-
         try {
-            aiAssistant.sendMessage(message, new AIAssistant.ResponseCallback() {
+            // Use the new method that accepts conversation history and state
+            aiAssistant.sendMessage(message, conversationHistory, conversationState, new AIAssistant.ResponseCallback() {
                 @Override
                 public void onSuccess(String response) {
                     mainHandler.post(() -> handler.onResponse(response));
