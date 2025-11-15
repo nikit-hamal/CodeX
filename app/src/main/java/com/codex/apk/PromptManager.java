@@ -1,11 +1,12 @@
 package com.codex.apk;
 
+import com.codex.apk.tools.Tool;
 import com.google.gson.JsonObject;
 import java.util.List;
 
 public class PromptManager {
 
-    public static JsonObject createSystemMessage(List<ToolSpec> enabledTools) {
+    public static JsonObject createSystemMessage(List<Tool> enabledTools) {
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
         if (enabledTools != null && !enabledTools.isEmpty()) {

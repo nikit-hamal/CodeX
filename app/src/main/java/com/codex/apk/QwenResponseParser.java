@@ -26,21 +26,6 @@ public class QwenResponseParser {
     }
 
     /**
-     * Represents a parsed plan step
-     */
-    public static class PlanStep {
-        public final String id;
-        public final String title;
-        public final String kind; // file | search | analysis | preview | validate | other
-
-        public PlanStep(String id, String title, String kind) {
-            this.id = id;
-            this.title = title;
-            this.kind = kind;
-        }
-    }
-
-    /**
      * Represents a parsed file operation from JSON response
      */
     public static class FileOperation {
@@ -98,15 +83,12 @@ public class QwenResponseParser {
     /**
      * Represents a complete parsed JSON response
      */
-    public static class ParsedResponse {
+    public static class ParsedResponse extends StreamingApiClient.ParsedResponse {
         public String action; // plan | file_operation | json_response | single file op
         public List<FileOperation> operations;
-        public List<PlanStep> planSteps;
-        public String explanation;
         public boolean isValid;
-        public String rawResponse;
 
-        public ParsedResponse(String action, List<FileOperation> operations, List<PlanStep> planSteps,
+        public ParsedResponse(String action, List<FileOperation> operations, List<ChatMessage.PlanStep> planSteps,
                               String explanation, boolean isValid) {
             this.action = action;
             this.operations = operations;
@@ -118,6 +100,9 @@ public class QwenResponseParser {
         public ParsedResponse() {
             this.operations = new ArrayList<>();
             this.planSteps = new ArrayList<>();
+            this.suggestions = new ArrayList<>();
+            this.fileChanges = new ArrayList<>();
+            this.toolCalls = new ArrayList<>();
         }
     }
 
@@ -146,16 +131,30 @@ public class QwenResponseParser {
             Log.d(TAG, "Parsing response: " + responseText.substring(0, Math.min(200, responseText.length())) + "...");
             JsonObject jsonObj = JsonParser.parseString(responseText).getAsJsonObject();
 
+            if (jsonObj.has("action") && "tool_code".equals(jsonObj.get("action").getAsString()) && jsonObj.has("tool_code")) {
+                ParsedResponse response = new ParsedResponse();
+                response.isValid = true;
+                response.action = "tool_code";
+                JsonArray toolCalls = jsonObj.getAsJsonArray("tool_code");
+                for (int i = 0; i < toolCalls.size(); i++) {
+                    JsonObject toolCall = toolCalls.get(i).getAsJsonObject();
+                    String toolName = toolCall.get("tool_name").getAsString();
+                    String toolArgs = toolCall.get("tool_args").getAsString();
+                    response.toolCalls.add(new StreamingApiClient.ToolCall(toolName, toolArgs));
+                }
+                return response;
+            }
+
             // Plan response (more flexible: any JSON with a "steps" array is considered a plan)
             if (jsonObj.has("steps") && jsonObj.get("steps").isJsonArray()) {
-                List<PlanStep> steps = new ArrayList<>();
+                List<ChatMessage.PlanStep> steps = new ArrayList<>();
                 JsonArray arr = jsonObj.getAsJsonArray("steps");
                 for (int i = 0; i < arr.size(); i++) {
                     JsonObject s = arr.get(i).getAsJsonObject();
                     String id = s.has("id") ? s.get("id").getAsString() : ("s" + (i + 1));
                     String title = s.has("title") ? s.get("title").getAsString() : ("Step " + (i + 1));
                     String kind = s.has("kind") ? s.get("kind").getAsString() : "file";
-                    steps.add(new PlanStep(id, title, kind));
+                    steps.add(new ChatMessage.PlanStep(id, title, kind));
                 }
                 String explanation = jsonObj.has("goal") ? ("Plan for: " + jsonObj.get("goal").getAsString()) : "Plan";
                 return new ParsedResponse("plan", new ArrayList<>(), steps, explanation, true);
@@ -399,15 +398,5 @@ public class QwenResponseParser {
         }
         
         return details;
-    }
-
-    /** Convert ParsedResponse plan steps to ChatMessage.PlanStep list */
-    public static List<ChatMessage.PlanStep> toPlanSteps(ParsedResponse response) {
-        List<ChatMessage.PlanStep> out = new ArrayList<>();
-        if (response.planSteps == null) return out;
-        for (PlanStep s : response.planSteps) {
-            out.add(new ChatMessage.PlanStep(s.id, s.title, s.kind));
-        }
-        return out;
     }
 }

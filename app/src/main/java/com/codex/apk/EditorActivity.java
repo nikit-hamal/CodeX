@@ -360,11 +360,6 @@ public class EditorActivity extends AppCompatActivity implements
         aiAssistantManager.sendAiPrompt(userPrompt, chatHistory, qwenState, tabManager.getActiveTabItem()); // Delegate to AiAssistantManager
     }
 
-    // Removed direct delegation of onAiErrorReceived, onAiRequestStarted, onAiRequestCompleted
-    // as these are handled internally by AiAssistantManager's AIActionListener.
-    // The AIChatFragment will call these methods directly on itself, and AiAssistantManager's
-    // AIActionListener will then update the AIChatFragment.
-
     @Override
     public void onAiAcceptActions(int messagePosition, ChatMessage message) {
         aiAssistantManager.onAiAcceptActions(messagePosition, message); // Delegate to AiAssistantManager
@@ -400,6 +395,19 @@ public class EditorActivity extends AppCompatActivity implements
     @Override
     public void onPlanDiscardClicked(int messagePosition, ChatMessage message) {
         aiAssistantManager.discardPlan(messagePosition, message);
+    }
+
+    @Override
+    public void onAiToolCall(String toolName, String toolArgs) {
+        if (aiChatFragment != null) {
+            aiChatFragment.onAiToolCall(toolName, toolArgs);
+        }
+    }
+
+    public void onAiActionsProcessed(ChatMessage message) {
+        if (aiChatFragment != null) {
+            aiChatFragment.addMessage(message);
+        }
     }
 
     // Public methods for managers to call back to EditorActivity for UI updates or core actions

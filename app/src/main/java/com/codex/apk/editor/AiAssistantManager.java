@@ -48,7 +48,6 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
     private final AiProcessor aiProcessor; // AiProcessor instance
     private final ExecutorService executorService;
     private final AiActionApplier actionApplier;
-    private final ToolExecutionCoordinator toolCoordinator;
     private final AiStreamingHandler streamingHandler;
     private final PlanExecutor planExecutor;
     private final AiResponseRenderer responseRenderer;
@@ -65,12 +64,10 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
 
         this.planExecutor = new PlanExecutor(activity, this); // Initialize the PlanExecutor
         this.actionApplier = new AiActionApplier(activity, aiProcessor, planExecutor, executorService);
-        this.toolCoordinator = new ToolExecutionCoordinator(activity, executorService, this::handleToolContinuation);
         this.streamingHandler = new AiStreamingHandler(activity, this);
         this.responseRenderer = new AiResponseRenderer();
 
         this.aiAssistant = new AIAssistant(activity, null, projectDir, projectName, executorService, this);
-        this.aiAssistant.setEnabledTools(com.codex.apk.ToolSpec.defaultFileToolsPlusSearchNet());
 
         // Model selection: prefer per-project last-used, else global default, else fallback
         SharedPreferences settingsPrefs = activity.getSharedPreferences("settings", Context.MODE_PRIVATE);
@@ -83,14 +80,6 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
         if (initialModel != null) {
             this.aiAssistant.setCurrentModel(initialModel);
         }
-    }
-
-    private void handleToolContinuation(JsonArray results) {
-        activity.runOnUiThread(() -> {
-            String continuation = ToolExecutionCoordinator.buildContinuationPayload(results);
-            Log.d(TAG, "Sending tool results back to AI: ```json\n" + continuation + "\n```\n");
-            sendAiPrompt("```json\n" + continuation + "\n```\n", new ArrayList<>(), activity.getQwenState(), activity.getActiveTab());
-        });
     }
 
     public void setCurrentStreamingMessagePosition(Integer position) {
@@ -301,7 +290,6 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
         onAiActionsProcessedInternal(rawAiResponseJson, explanation, suggestions, proposedFileChanges, new ArrayList<>(), aiModelDisplayName, null, null);
     }
 
-    @Override
     public void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions, List<ChatMessage.FileActionDetail> proposedFileChanges, List<ChatMessage.PlanStep> planSteps, String aiModelDisplayName) {
         onAiActionsProcessedInternal(rawAiResponseJson, explanation, suggestions, proposedFileChanges, planSteps, aiModelDisplayName, null, null);
     }
@@ -334,20 +322,6 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
                 currentStreamingMessagePosition = null;
             }
 
-            // Centralized tool call handling
-            String jsonToParseForTools = AiResponseUtils.extractJsonBlock(explanation, rawAiResponseJson);
-            JsonArray toolCalls = AiResponseUtils.extractToolCalls(jsonToParseForTools);
-
-            if (toolCalls != null) {
-                try {
-                    currentToolsMessagePosition = toolCoordinator.displayRunningTools(uiFrag, aiModelDisplayName, rawAiResponseJson, toolCalls);
-                    toolCoordinator.executeTools(toolCalls, activity.getProjectDirectory(), currentToolsMessagePosition, uiFrag);
-                    lastToolUsages = toolCoordinator.getLastToolUsages();
-                    return;
-                } catch (Exception e) {
-                    Log.w(TAG, "Could not execute tool call. Error parsing JSON.", e);
-                }
-            }
 
             List<ChatMessage.FileActionDetail> effectiveProposedFileChanges = proposedFileChanges;
             boolean isPlan = planSteps != null && !planSteps.isEmpty();
@@ -521,13 +495,13 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
     }
 
     @Override
-    public void onStreamCompleted(String requestId, com.codex.apk.QwenResponseParser.ParsedResponse response) {
+    public void onStreamCompleted(String requestId, com.codex.apk.StreamingApiClient.ParsedResponse response) {
         onAiActionsProcessedInternal(
             response.rawResponse,
             response.explanation,
             new ArrayList<>(),
-            com.codex.apk.QwenResponseParser.toFileActionDetails(response),
-            com.codex.apk.QwenResponseParser.toPlanSteps(response),
+            response.fileChanges,
+            response.planSteps,
             aiAssistant.getCurrentModel().getDisplayName(),
             null,
             null
@@ -539,5 +513,25 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
     public void onStreamError(String requestId, String errorMessage, Throwable throwable) {
         onAiError(errorMessage);
         onAiRequestCompleted();
+    }
+
+    public void onAiActionsProcessed(ChatMessage message) {
+        onAiActionsProcessedInternal(message.getRawAiResponseJson(), message.getContent(), message.getSuggestions(), message.getProposedFileChanges(), message.getPlanSteps(), message.getAiModelName(), message.getThinkingContent(), message.getWebSources());
+    }
+
+    @Override
+    public void onAiToolCall(String toolName, String toolArgs) {
+        activity.runOnUiThread(() -> {
+            AIChatFragment uiFrag = activity.getAiChatFragment();
+            if (uiFrag == null) {
+                Log.w(TAG, "AiChatFragment is null! Cannot add tool call message to UI.");
+                return;
+            }
+            ChatMessage toolCallMsg = new ChatMessage(ChatMessage.SENDER_AI_TOOL_CALL, "", System.currentTimeMillis());
+            ChatMessage.ToolUsage toolUsage = new ChatMessage.ToolUsage(toolName);
+            toolUsage.argsJson = toolArgs;
+            toolCallMsg.getToolUsages().add(toolUsage);
+            uiFrag.addMessage(toolCallMsg);
+        });
     }
 }

@@ -16,6 +16,8 @@ import com.codex.apk.ai.WebSource;
 public class ChatMessage {
     public static final int SENDER_USER = 0;
     public static final int SENDER_AI = 1;
+    public static final int SENDER_AI_PLAN = 2;
+    public static final int SENDER_AI_TOOL_CALL = 3;
 
     // Status constants for AI messages with proposed actions
     public static final int STATUS_NONE = -1; // Default for user messages or AI thinking/error messages

@@ -1,8 +1,10 @@
 package com.codex.apk;
 
 import com.codex.apk.ai.AIModel;
+import com.codex.apk.tools.Tool;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.util.List;
 
 public class QwenRequestFactory {
@@ -33,7 +35,7 @@ public class QwenRequestFactory {
         return builder.build();
     }
 
-    public static JsonObject buildCompletionRequestBody(QwenConversationState state, AIModel model, boolean thinkingModeEnabled, boolean webSearchEnabled, List<ToolSpec> enabledTools, String userMessage) {
+    public static JsonObject buildCompletionRequestBody(QwenConversationState state, AIModel model, boolean thinkingModeEnabled, boolean webSearchEnabled, List<Tool> enabledTools, String userMessage) {
         JsonObject requestBody = new JsonObject();
         requestBody.addProperty("stream", true);
         requestBody.addProperty("incremental_output", true);
@@ -54,7 +56,18 @@ public class QwenRequestFactory {
         requestBody.add("messages", messages);
 
         if (enabledTools != null && !enabledTools.isEmpty()) {
-            requestBody.add("tools", ToolSpec.toJsonArray(enabledTools));
+            JsonArray tools = new JsonArray();
+            for (Tool tool : enabledTools) {
+                JsonObject toolJson = new JsonObject();
+                toolJson.addProperty("type", "function");
+                JsonObject functionJson = new JsonObject();
+                functionJson.addProperty("name", tool.getName());
+                functionJson.addProperty("description", tool.getDescription());
+                functionJson.add("parameters", new JsonParser().parse(tool.getParameterSchema().toString()));
+                toolJson.add("function", functionJson);
+                tools.add(toolJson);
+            }
+            requestBody.add("tools", tools);
             JsonObject toolChoice = new JsonObject();
             toolChoice.addProperty("type", "auto");
             requestBody.add("tool_choice", toolChoice);
@@ -96,7 +109,7 @@ public class QwenRequestFactory {
         return requestBody;
     }
 
-    private static JsonObject createSystemMessage(List<ToolSpec> enabledTools) {
+    private static JsonObject createSystemMessage(List<Tool> enabledTools) {
         return PromptManager.createSystemMessage(enabledTools);
     }
 

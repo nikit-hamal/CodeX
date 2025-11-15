@@ -3,6 +3,13 @@ package com.codex.apk;
 import android.app.Application;
 import android.content.Context;
 import android.content.Intent;
+import com.codex.apk.tools.DeleteFileTool;
+import com.codex.apk.tools.ListFilesTool;
+import com.codex.apk.tools.ReadFileTool;
+import com.codex.apk.tools.RenameFileTool;
+import com.codex.apk.tools.ToolRegistry;
+import com.codex.apk.tools.WriteFileTool;
+import java.io.File;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
@@ -29,6 +36,17 @@ public class CodeXApplication extends Application {
                 handleUncaughtException(e);
             }
         });
+
+        registerTools();
+    }
+
+    private void registerTools() {
+        ToolRegistry registry = ToolRegistry.getInstance();
+        registry.registerTool(new ReadFileTool());
+        registry.registerTool(new WriteFileTool());
+        registry.registerTool(new ListFilesTool());
+        registry.registerTool(new DeleteFileTool());
+        registry.registerTool(new RenameFileTool());
     }
 
     public static Context getAppContext() {
