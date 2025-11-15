@@ -1,6 +1,7 @@
 package com.codex.apk;
 
 import com.codex.apk.ai.AIModel;
+import com.codex.apk.tools.Tool;
 import java.io.File;
 import java.util.List;
 import okhttp3.ConnectionPool;
@@ -11,6 +12,25 @@ public interface StreamingApiClient extends ApiClient {
     void cancelStreaming(String requestId);
     void setConnectionPool(ConnectionPool pool);
 
+    class ParsedResponse {
+        public String rawResponse;
+        public String explanation;
+        public List<String> suggestions;
+        public List<ChatMessage.FileActionDetail> fileChanges;
+        public List<ChatMessage.PlanStep> planSteps;
+        public List<ToolCall> toolCalls;
+    }
+
+    class ToolCall {
+        public final String name;
+        public final String args;
+
+        public ToolCall(String name, String args) {
+            this.name = name;
+            this.args = args;
+        }
+    }
+
     class MessageRequest {
         private final String requestId;
         private final String message;
@@ -19,7 +39,7 @@ public interface StreamingApiClient extends ApiClient {
         private final Object conversationState;
         private final boolean thinkingModeEnabled;
         private final boolean webSearchEnabled;
-        private final List<ToolSpec> enabledTools;
+        private final List<Tool> enabledTools;
         private final List<File> attachments;
 
         public MessageRequest(Builder builder) {
@@ -41,7 +61,7 @@ public interface StreamingApiClient extends ApiClient {
         public Object getConversationState() { return conversationState; }
         public boolean isThinkingModeEnabled() { return thinkingModeEnabled; }
         public boolean isWebSearchEnabled() { return webSearchEnabled; }
-        public List<ToolSpec> getEnabledTools() { return enabledTools; }
+        public List<Tool> getEnabledTools() { return enabledTools; }
         public List<File> getAttachments() { return attachments; }
 
         public static class Builder {
@@ -51,7 +71,7 @@ public interface StreamingApiClient extends ApiClient {
             private Object conversationState;
             private boolean thinkingModeEnabled;
             private boolean webSearchEnabled;
-            private List<ToolSpec> enabledTools;
+            private List<Tool> enabledTools;
             private List<File> attachments;
 
             public Builder message(String message) { this.message = message; return this; }
@@ -60,7 +80,7 @@ public interface StreamingApiClient extends ApiClient {
             public Builder conversationState(Object state) { this.conversationState = state; return this; }
             public Builder thinkingModeEnabled(boolean enabled) { this.thinkingModeEnabled = enabled; return this; }
             public Builder webSearchEnabled(boolean enabled) { this.webSearchEnabled = enabled; return this; }
-            public Builder enabledTools(List<ToolSpec> tools) { this.enabledTools = tools; return this; }
+            public Builder enabledTools(List<Tool> tools) { this.enabledTools = tools; return this; }
             public Builder attachments(List<File> attachments) { this.attachments = attachments; return this; }
             public MessageRequest build() { return new MessageRequest(this); }
         }
@@ -69,7 +89,7 @@ public interface StreamingApiClient extends ApiClient {
     interface StreamListener {
         void onStreamStarted(String requestId);
         void onStreamPartialUpdate(String requestId, String partialResponse, boolean isThinking);
-        void onStreamCompleted(String requestId, QwenResponseParser.ParsedResponse response);
+        void onStreamCompleted(String requestId, ParsedResponse response);
         void onStreamError(String requestId, String errorMessage, Throwable throwable);
     }
 
