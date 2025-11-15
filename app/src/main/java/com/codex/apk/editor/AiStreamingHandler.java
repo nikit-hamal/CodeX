@@ -25,10 +25,6 @@ public class AiStreamingHandler {
                                      AIAssistant aiAssistant,
                                      boolean suppressThinkingMessage) {
         if (suppressThinkingMessage) {
-            if (chatFragment != null) {
-                chatFragment.hideThinkingMessage();
-            }
-            manager.setCurrentStreamingMessagePosition(null);
             return;
         }
 
@@ -36,21 +32,13 @@ public class AiStreamingHandler {
             ChatMessage aiMsg = new ChatMessage(
                     ChatMessage.SENDER_AI,
                     activity.getString(com.codex.apk.R.string.ai_is_thinking),
-                    null, null,
-                    aiAssistant.getCurrentModel().getDisplayName(),
-                    System.currentTimeMillis(),
-                    null, null,
-                    ChatMessage.STATUS_NONE
+                    System.currentTimeMillis()
             );
-            manager.setCurrentStreamingMessagePosition(chatFragment.addMessage(aiMsg));
+            chatFragment.addMessage(aiMsg);
         }
     }
 
     public void handleRequestCompleted(AIChatFragment chatFragment) {
-        if (chatFragment != null) {
-            chatFragment.hideThinkingMessage();
-        }
-        manager.setCurrentStreamingMessagePosition(null);
     }
 
     public void handleStreamUpdate(AIChatFragment chatFragment,
@@ -61,7 +49,7 @@ public class AiStreamingHandler {
             return;
         }
 
-        ChatMessage existing = chatFragment.getMessageAt(messagePosition);
+        ChatMessage existing = chatFragment.getChatHistory().get(messagePosition);
         if (existing == null) {
             return;
         }

@@ -42,7 +42,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
     @Override
     public int getItemViewType(int position) {
-        return messages.get(position).getSender() == ChatMessage.SENDER_USER ? VIEW_TYPE_USER : VIEW_TYPE_AI;
+        return messages.get(position).getSender();
     }
 
     @NonNull
