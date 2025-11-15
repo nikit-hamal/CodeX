@@ -44,7 +44,7 @@ public class AIAssistant {
     }
 
     private void initializeApiClient(Context context, File projectDir) {
-        apiClient = new QwenApiClient(context, actionListener, projectDir);
+        apiClient = new QwenApiClient(context);
     }
 
     public void sendPrompt(String userPrompt, List<ChatMessage> chatHistory, QwenConversationState qwenState, String fileName, String fileContent) {
@@ -106,8 +106,6 @@ public class AIAssistant {
                         ChatMessage message = new ChatMessage(ChatMessage.SENDER_AI, response.explanation, System.currentTimeMillis());
                         message.setPlanSteps(response.planSteps);
                         message.setProposedFileChanges(response.fileChanges);
-                        message.setSuggestions(response.suggestions);
-                        message.setRawAiResponseJson(response.rawResponse);
                         message.setAiModelName(currentModel.getDisplayName());
                         actionListener.onAiActionsProcessed(message);
                     }

@@ -260,7 +260,7 @@ public class QwenApiClient implements StreamingApiClient {
 
                 QwenStreamProcessor.processChunk(chunk, state, finalText, (partialResult, isThinking) -> {
                     listener.onStreamPartialUpdate(request.getRequestId(), partialResult, isThinking);
-                }, actionListener);
+                }, null);
             }
 
             @Override
@@ -304,7 +304,7 @@ public class QwenApiClient implements StreamingApiClient {
     private void processFinalText(String completedText, String rawSse, StreamListener listener, MessageRequest request, QwenConversationState state) {
         QwenResponseParser.parseResponseAsync(completedText, rawSse, new QwenResponseParser.ParseResultListener() {
             @Override
-            public void onParseSuccess(ParsedResponse parsedResponse) {
+            public void onParseSuccess(QwenResponseParser.ParsedResponse parsedResponse) {
                 listener.onStreamCompleted(request.getRequestId(), parsedResponse);
             }
 

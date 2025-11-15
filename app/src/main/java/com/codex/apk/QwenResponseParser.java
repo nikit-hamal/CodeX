@@ -26,21 +26,6 @@ public class QwenResponseParser {
     }
 
     /**
-     * Represents a parsed plan step
-     */
-    public static class PlanStep {
-        public final String id;
-        public final String title;
-        public final String kind; // file | search | analysis | preview | validate | other
-
-        public PlanStep(String id, String title, String kind) {
-            this.id = id;
-            this.title = title;
-            this.kind = kind;
-        }
-    }
-
-    /**
      * Represents a parsed file operation from JSON response
      */
     public static class FileOperation {
@@ -103,7 +88,7 @@ public class QwenResponseParser {
         public List<FileOperation> operations;
         public boolean isValid;
 
-        public ParsedResponse(String action, List<FileOperation> operations, List<PlanStep> planSteps,
+        public ParsedResponse(String action, List<FileOperation> operations, List<ChatMessage.PlanStep> planSteps,
                               String explanation, boolean isValid) {
             this.action = action;
             this.operations = operations;
@@ -162,14 +147,14 @@ public class QwenResponseParser {
 
             // Plan response (more flexible: any JSON with a "steps" array is considered a plan)
             if (jsonObj.has("steps") && jsonObj.get("steps").isJsonArray()) {
-                List<PlanStep> steps = new ArrayList<>();
+                List<ChatMessage.PlanStep> steps = new ArrayList<>();
                 JsonArray arr = jsonObj.getAsJsonArray("steps");
                 for (int i = 0; i < arr.size(); i++) {
                     JsonObject s = arr.get(i).getAsJsonObject();
                     String id = s.has("id") ? s.get("id").getAsString() : ("s" + (i + 1));
                     String title = s.has("title") ? s.get("title").getAsString() : ("Step " + (i + 1));
                     String kind = s.has("kind") ? s.get("kind").getAsString() : "file";
-                    steps.add(new PlanStep(id, title, kind));
+                    steps.add(new ChatMessage.PlanStep(id, title, kind));
                 }
                 String explanation = jsonObj.has("goal") ? ("Plan for: " + jsonObj.get("goal").getAsString()) : "Plan";
                 return new ParsedResponse("plan", new ArrayList<>(), steps, explanation, true);
@@ -413,15 +398,5 @@ public class QwenResponseParser {
         }
         
         return details;
-    }
-
-    /** Convert ParsedResponse plan steps to ChatMessage.PlanStep list */
-    public static List<ChatMessage.PlanStep> toPlanSteps(ParsedResponse response) {
-        List<ChatMessage.PlanStep> out = new ArrayList<>();
-        if (response.planSteps == null) return out;
-        for (PlanStep s : response.planSteps) {
-            out.add(new ChatMessage.PlanStep(s.id, s.title, s.kind));
-        }
-        return out;
     }
 }
