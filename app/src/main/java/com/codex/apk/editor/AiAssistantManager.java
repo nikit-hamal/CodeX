@@ -70,7 +70,6 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
         this.responseRenderer = new AiResponseRenderer();
 
         this.aiAssistant = new AIAssistant(activity, null, projectDir, projectName, executorService, this);
-        this.aiAssistant.setEnabledTools(com.codex.apk.ToolSpec.defaultFileToolsPlusSearchNet());
 
         // Model selection: prefer per-project last-used, else global default, else fallback
         SharedPreferences settingsPrefs = activity.getSharedPreferences("settings", Context.MODE_PRIVATE);
@@ -539,5 +538,26 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
     public void onStreamError(String requestId, String errorMessage, Throwable throwable) {
         onAiError(errorMessage);
         onAiRequestCompleted();
+    }
+
+    @Override
+    public void onAiActionsProcessed(ChatMessage message) {
+        onAiActionsProcessedInternal(message.getRawAiResponseJson(), message.getContent(), message.getSuggestions(), message.getProposedFileChanges(), message.getPlanSteps(), message.getAiModelName(), message.getThinkingContent(), message.getWebSources());
+    }
+
+    @Override
+    public void onAiToolCall(String toolName, String toolArgs) {
+        activity.runOnUiThread(() -> {
+            AIChatFragment uiFrag = activity.getAiChatFragment();
+            if (uiFrag == null) {
+                Log.w(TAG, "AiChatFragment is null! Cannot add tool call message to UI.");
+                return;
+            }
+            ChatMessage toolCallMsg = new ChatMessage(ChatMessage.SENDER_AI_TOOL_CALL, "", System.currentTimeMillis());
+            ChatMessage.ToolUsage toolUsage = new ChatMessage.ToolUsage(toolName);
+            toolUsage.argsJson = toolArgs;
+            toolCallMsg.getToolUsages().add(toolUsage);
+            uiFrag.addMessage(toolCallMsg);
+        });
     }
 }
