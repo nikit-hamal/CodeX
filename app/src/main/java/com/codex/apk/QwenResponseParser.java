@@ -98,13 +98,10 @@ public class QwenResponseParser {
     /**
      * Represents a complete parsed JSON response
      */
-    public static class ParsedResponse {
+    public static class ParsedResponse extends StreamingApiClient.ParsedResponse {
         public String action; // plan | file_operation | json_response | single file op
         public List<FileOperation> operations;
-        public List<PlanStep> planSteps;
-        public String explanation;
         public boolean isValid;
-        public String rawResponse;
 
         public ParsedResponse(String action, List<FileOperation> operations, List<PlanStep> planSteps,
                               String explanation, boolean isValid) {
@@ -118,6 +115,9 @@ public class QwenResponseParser {
         public ParsedResponse() {
             this.operations = new ArrayList<>();
             this.planSteps = new ArrayList<>();
+            this.suggestions = new ArrayList<>();
+            this.fileChanges = new ArrayList<>();
+            this.toolCalls = new ArrayList<>();
         }
     }
 
@@ -145,6 +145,20 @@ public class QwenResponseParser {
         try {
             Log.d(TAG, "Parsing response: " + responseText.substring(0, Math.min(200, responseText.length())) + "...");
             JsonObject jsonObj = JsonParser.parseString(responseText).getAsJsonObject();
+
+            if (jsonObj.has("action") && "tool_code".equals(jsonObj.get("action").getAsString()) && jsonObj.has("tool_code")) {
+                ParsedResponse response = new ParsedResponse();
+                response.isValid = true;
+                response.action = "tool_code";
+                JsonArray toolCalls = jsonObj.getAsJsonArray("tool_code");
+                for (int i = 0; i < toolCalls.size(); i++) {
+                    JsonObject toolCall = toolCalls.get(i).getAsJsonObject();
+                    String toolName = toolCall.get("tool_name").getAsString();
+                    String toolArgs = toolCall.get("tool_args").getAsString();
+                    response.toolCalls.add(new StreamingApiClient.ToolCall(toolName, toolArgs));
+                }
+                return response;
+            }
 
             // Plan response (more flexible: any JSON with a "steps" array is considered a plan)
             if (jsonObj.has("steps") && jsonObj.get("steps").isJsonArray()) {

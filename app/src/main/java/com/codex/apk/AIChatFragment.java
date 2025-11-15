@@ -39,6 +39,7 @@ public class AIChatFragment extends Fragment implements ChatMessageAdapter.OnAiA
         void onQwenConversationStateUpdated(QwenConversationState state);
         void onPlanAcceptClicked(int messagePosition, ChatMessage message);
         void onPlanDiscardClicked(int messagePosition, ChatMessage message);
+        void onAiToolCall(String toolName, String toolArgs);
     }
 
     // Hook used by UI manager to trigger attachment selection
@@ -354,6 +355,14 @@ public class AIChatFragment extends Fragment implements ChatMessageAdapter.OnAiA
     public void onPlanAcceptClicked(int pos, ChatMessage msg) { if (listener != null) listener.onPlanAcceptClicked(pos, msg); }
     @Override
     public void onPlanDiscardClicked(int pos, ChatMessage msg) { if (listener != null) listener.onPlanDiscardClicked(pos, msg); }
+
+    public void onAiToolCall(String toolName, String toolArgs) {
+        ChatMessage toolCallMsg = new ChatMessage(ChatMessage.SENDER_AI_TOOL_CALL, "", System.currentTimeMillis());
+        ChatMessage.ToolUsage toolUsage = new ChatMessage.ToolUsage(toolName);
+        toolUsage.argsJson = toolArgs;
+        toolCallMsg.getToolUsages().add(toolUsage);
+        addMessage(toolCallMsg);
+    }
 
     public void onQwenConversationStateUpdated(QwenConversationState state) {
         if (state != null) {

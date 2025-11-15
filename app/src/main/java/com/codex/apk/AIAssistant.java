@@ -3,12 +3,20 @@ package com.codex.apk;
 import android.content.Context;
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
 import com.codex.apk.ai.AIModel;
-import com.codex.apk.ai.AIProvider;
+import com.codex.apk.tools.Tool;
+import com.codex.apk.tools.ToolRegistry;
+import com.codex.apk.tools.ToolResult;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class AIAssistant {
 
@@ -17,7 +25,6 @@ public class AIAssistant {
     private boolean thinkingModeEnabled = false;
     private boolean webSearchEnabled = false;
     private boolean agentModeEnabled = true; // New agent mode flag
-    private List<ToolSpec> enabledTools = new ArrayList<>();
     private AIAssistant.AIActionListener actionListener;
     private File projectDir; // Track project directory for tool operations
 
@@ -57,7 +64,7 @@ public class AIAssistant {
 
     public void sendMessageStreaming(String message, List<ChatMessage> chatHistory, QwenConversationState qwenState, List<File> attachments, String fileName, String fileContent) {
         if (apiClient instanceof StreamingApiClient) {
-             String finalMessage = message;
+            String finalMessage = message;
             if (fileContent != null && !fileContent.isEmpty()) {
                 finalMessage = "File `" + fileName + "`:\n```\n" + fileContent + "\n```\n\n" + message;
             }
@@ -66,6 +73,8 @@ public class AIAssistant {
             if (system != null && !system.isEmpty()) {
                 finalMessage = system + "\n\n" + finalMessage;
             }
+
+            List<Tool> enabledTools = ToolRegistry.getInstance().getAllTools();
 
             StreamingApiClient.MessageRequest request = new StreamingApiClient.MessageRequest.Builder()
                 .message(finalMessage)
@@ -78,12 +87,79 @@ public class AIAssistant {
                 .attachments(attachments)
                 .build();
 
-            ((StreamingApiClient) apiClient).sendMessageStreaming(request, (StreamingApiClient.StreamListener) actionListener);
+            ((StreamingApiClient) apiClient).sendMessageStreaming(request, new StreamingApiClient.StreamListener() {
+                @Override
+                public void onStreamStarted(String requestId) {
+                    actionListener.onAiRequestStarted();
+                }
+
+                @Override
+                public void onStreamPartialUpdate(String requestId, String partialResponse, boolean isThinking) {
+                    actionListener.onAiStreamUpdate(partialResponse, isThinking);
+                }
+
+                @Override
+                public void onStreamCompleted(String requestId, StreamingApiClient.ParsedResponse response) {
+                    if (response.toolCalls != null && !response.toolCalls.isEmpty()) {
+                        executeToolCalls(response.toolCalls, chatHistory, qwenState, attachments, fileName, fileContent);
+                    } else {
+                        ChatMessage message = new ChatMessage(ChatMessage.SENDER_AI, response.explanation, System.currentTimeMillis());
+                        message.setPlanSteps(response.planSteps);
+                        message.setProposedFileChanges(response.fileChanges);
+                        message.setSuggestions(response.suggestions);
+                        message.setRawAiResponseJson(response.rawResponse);
+                        message.setAiModelName(currentModel.getDisplayName());
+                        actionListener.onAiActionsProcessed(message);
+                    }
+                }
+
+                @Override
+                public void onStreamError(String requestId, String errorMessage, Throwable throwable) {
+                    actionListener.onAiError(errorMessage);
+                }
+            });
         } else {
             if (actionListener != null) {
                 actionListener.onAiError("API client for " + currentModel.getProvider() + " not found.");
             }
         }
+    }
+
+    private void executeToolCalls(List<StreamingApiClient.ToolCall> toolCalls, List<ChatMessage> chatHistory, QwenConversationState qwenState, List<File> attachments, String fileName, String fileContent) {
+        JsonArray toolResults = new JsonArray();
+        for (StreamingApiClient.ToolCall toolCall : toolCalls) {
+            actionListener.onAiToolCall(toolCall.name, toolCall.args);
+            Tool tool = ToolRegistry.getInstance().getTool(toolCall.name);
+            if (tool != null) {
+                try {
+                    ToolResult toolResult = tool.execute(projectDir, new JSONObject(toolCall.args));
+                    JsonObject result = new JsonObject();
+                    result.addProperty("toolName", toolCall.name);
+                    if (toolResult.isSuccess()) {
+                        result.add("result", new JsonParser().parse(toolResult.getResult().toString()).getAsJsonObject());
+                    } else {
+                        result.addProperty("error", toolResult.getError());
+                    }
+                    toolResults.add(result);
+                } catch (JSONException e) {
+                    JsonObject errorResult = new JsonObject();
+                    errorResult.addProperty("toolName", toolCall.name);
+                    errorResult.addProperty("error", e.getMessage());
+                    toolResults.add(errorResult);
+                }
+            }
+        }
+
+        // Create a new message with the tool results and send it back to the model
+        String continuationMessage = buildToolResultContinuation(toolResults);
+        sendMessageStreaming(continuationMessage, chatHistory, qwenState, attachments, fileName, fileContent);
+    }
+
+    private String buildToolResultContinuation(JsonArray results) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("action", "tool_result");
+        payload.add("results", results);
+        return payload.toString();
     }
 
     public interface RefreshCallback {
@@ -93,10 +169,8 @@ public class AIAssistant {
     public interface AIActionListener {
         void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions,
                                  List<ChatMessage.FileActionDetail> proposedFileChanges, String aiModelDisplayName);
-        void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions,
-                                 List<ChatMessage.FileActionDetail> proposedFileChanges,
-                                 List<ChatMessage.PlanStep> planSteps,
-                                 String aiModelDisplayName);
+        void onAiActionsProcessed(ChatMessage message);
+        void onAiToolCall(String toolName, String toolArgs);
         void onAiError(String errorMessage);
         void onAiRequestStarted();
         void onAiStreamUpdate(String partialResponse, boolean isThinking);
@@ -113,7 +187,6 @@ public class AIAssistant {
     public void setWebSearchEnabled(boolean enabled) { this.webSearchEnabled = enabled; }
     public boolean isAgentModeEnabled() { return agentModeEnabled; }
     public void setAgentModeEnabled(boolean enabled) { this.agentModeEnabled = enabled; }
-    public void setEnabledTools(List<ToolSpec> tools) { this.enabledTools = tools; }
     public void setActionListener(AIActionListener listener) { this.actionListener = listener; }
     public void shutdown() {}
 }
