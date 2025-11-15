@@ -53,7 +53,7 @@ public class ReadFileTool implements Tool {
                 result.put("message", message);
                 return ToolResult.success(result);
             }
-        } catch (JSONException e) {
+        } catch (JSONException | java.io.IOException e) {
             return ToolResult.error(e.getMessage());
         }
     }
