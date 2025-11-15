@@ -105,6 +105,9 @@ public class AIChatUIManager {
         android.content.SharedPreferences prefs = context.getSharedPreferences("model_settings", Context.MODE_PRIVATE);
         List<AIModel> enabledModels = new java.util.ArrayList<>();
         for (AIModel model : AIModel.getAllModels()) {
+            if (model.getProvider() != AIProvider.QWEN) {
+                continue; // Skip non-Qwen models
+            }
             String key = "model_" + model.getProvider().name() + "_" + model.getModelId() + "_enabled";
             if (prefs.getBoolean(key, true)) {
                 enabledModels.add(model);
@@ -195,6 +198,20 @@ public class AIChatUIManager {
             }
             return false;
         });
+
+        // Initialize model selector text and set listeners
+        AIAssistant aiAssistant = fragment.getAIAssistant();
+        if (aiAssistant != null) {
+            if (aiAssistant.getCurrentModel() != null) {
+                textSelectedModel.setText(aiAssistant.getCurrentModel().getDisplayName());
+            } else {
+                textSelectedModel.setText("Select Model");
+            }
+            updateSettingsButtonState(aiAssistant);
+
+            layoutModelSelectorCustom.setOnClickListener(v -> showModelPickerDialog(aiAssistant));
+            buttonAiSettings.setOnClickListener(v -> showAiSettingsDialog(aiAssistant));
+        }
     }
 
     public void scrollToBottom() {
