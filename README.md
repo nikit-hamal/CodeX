@@ -37,7 +37,7 @@ app/
 ## Build & Run Checklist
 - **Tooling**: Android Studio Flamingo+ (Gradle 8.x), Android SDK 34, JDK 17.
 - **Clone**: `git clone` then open the root in Android Studio. Import as Gradle project.
-- **API Credentials**: Configure via `SettingsActivity` UI (runtime) or SharedPreferences (debug). Providers like Gemini require API keys or cookies; refer to class-level KDoc in `GeminiFreeApiClient` and `GeminiOfficialApiClient` for cookie/key names.
+- **API Credentials**: The app uses a single, built-in API provider (Qwen) that does not require user-configured API keys.
 - **Signing**: A debug keystore is bundled as `app/codex.keystore` (password `codex123`). If removing from VCS, update `build.gradle` to match your keystore.
 - **Gradle Sync**: Ensure sync completes; dependencies are published to Maven Central or GitHub packages (no local AARs required).
 - **Run**: Choose an emulator/device on API 21+ and launch.
@@ -46,38 +46,35 @@ app/
 
 - **Presentation Layer**: Activities and fragments coordinate UI. `MainActivity` handles project list navigation; `EditorActivity` hosts `CodeEditorFragment` (code view) and `AIChatFragment` (assistant view).
 - **Manager Layer**: High-level orchestrators encapsulate domain flows.
-  - `AIAssistantManager` (`editor/AiAssistantManager.java`) links AI events to UI updates and tool execution.
   - `ProjectManager` (`ProjectManager.java`) and `ProjectImportExportManager` manage workspace persistence.
-  - `PlanExecutor` (`editor/PlanExecutor.java`) drives AI-generated plans.
+  - `ToolExecutor` (`ToolExecutor.java`) drives AI-generated file operations.
 - **Domain Layer**: Models in `ai/` describe providers, models, capabilities, and prompt composition.
-- **Infrastructure Layer**: `ApiClient` implementations (`QwenApiClient`, `GeminiFreeApiClient`, etc.) perform network I/O with OkHttp, streaming via `SseClient`.
+- **Infrastructure Layer**: The `QwenApiClient` (`QwenApiClient.java`) performs network I/O with OkHttp, with streaming handled via `SseClient`.
 - **Utilities**: Helpers in `util/` (`FileOps`, `JsonUtils`, `ResponseUtils`) consolidate cross-cutting concerns.
-- **Lint & Tools**: `lint/` package includes simple HTML/CSS/JS linting; `ToolExecutor` runs AI-suggested file ops.
 
 The architecture does not enforce MVVM; responsibilities bleed between UI and managers. Future work should introduce ViewModels and dependency injection to tighten contracts.
 
 ## Startup Sequence
 1. `CodeXApplication.onCreate()` applies theming via `ThemeManager.setupTheme()` and installs a crash handler launching `DebugActivity` (`DebugActivity.java`).
 2. `MainActivity` loads recent projects using `ProjectManager` and `ProjectsAdapter`.
-3. Selecting a project starts `EditorActivity`, which wires `AiAssistantManager`, `FileTreeManager`, `TabManager`, and `CodeEditorFragment`.
+3. Selecting a project starts `EditorActivity`, which wires `FileTreeManager`, `TabManager`, and `CodeEditorFragment`.
 4. `EditorActivity` attaches `AIChatFragment`; `AIChatUIManager` binds RecyclerViews and view bindings.
-5. `AIAssistant` initializes provider clients (`initializeApiClients()`), reading persisted keys from `SettingsActivity` helpers.
+5. `AIAssistant` is initialized, which in turn sets up the `QwenApiClient`.
 
 ## Feature Walkthroughs
 
 ### AI Chat + Tooling Flow
 - **Entry**: User submits prompt through `AIChatFragment` (`AIChatFragment.java`).
-- **Routing**: `AIAssistant.sendMessage()` chooses `ApiClient` using `AIModel.getProvider()`.
-- **Network**: Providers stream via `SseClient.postStreamWithRetry()` (see `QwenApiClient.java` and `QwenStreamProcessor.java`).
-- **Parsing**: `QwenResponseParser` extracts actions, plans, tool suggestions. Other clients perform inline JSON parsing with Gson.
-- **UI Update**: `AiAssistantManager` posts updates to `ChatMessageAdapter`, toggling plan cards, file diffs, and tool usage.
+- **Network**: The `AIAssistant` routes requests to the `QwenApiClient`, which streams responses via `SseClient` (see `QwenStreamProcessor.java`).
+- **Parsing**: `QwenResponseParser` extracts actions, plans, and tool suggestions from the incoming stream.
+- **UI Update**: `AIChatUIManager` posts updates to `ChatMessageAdapter`, toggling plan cards, file diffs, and tool usage.
 - **Tool Execution**: `ToolExecutor` orchestrates file modifications, calling helpers in `FileOps` and diff utilities (`DiffGenerator`, `DiffUtils`).
 
 Key data class: `ChatMessage` stores raw responses, plan steps, thinking content, web sources, and tool usage for rendering.
 
 ### Project Lifecycle
-- `ProjectManager` supports creating, opening, renaming, duplicating, and deleting projects under the workspace root.
-- `GitManager` wraps JGit commands for clone, commit, push, and diff operations.
+- `ProjectManager` supports creating, opening, renaming, and deleting projects under the workspace root.
+- `GitManager` wraps JGit commands for cloning remote repositories.
 - `ProjectImportExportManager` zips/unzips workspaces, coordinating with `AdvancedFileManager` for storage access and SAF prompts.
 - Recycler adapters (`ProjectsAdapter`, `RecentProjectsAdapter`) render project items.
 
@@ -88,29 +85,15 @@ Key data class: `ChatMessage` stores raw responses, plan steps, thinking content
 - Markdown previews rely on `MarkdownFormatter` leveraging Markwon modules.
 
 ### Settings & Model Management
-- `SettingsActivity` exposes preferences for API keys, cookies, theme, and feature toggles (agent mode, web search, thinking mode).
-- `ModelsActivity` displays provider/model combinations using `ModelAdapter`; `AIAssistant.refreshModelsForProvider()` fetches updates asynchronously.
+- `SettingsActivity` exposes preferences for theme, editor settings (font size, word wrap), and other UI toggles.
+- `ModelsActivity` displays available AI models using `ModelAdapter` and allows setting a default model.
 - Provider metadata defined by `AIModel`, `AIProvider`, and `ModelCapabilities` enumerations.
 
-## AI Provider Abstraction Layer
+## AI Provider Integration
 
-`ApiClient` (`ApiClient.java`) defines the contract for provider integrations. Current implementations:
+The application has been streamlined to use a single AI provider, **Alibaba Qwen**, via the `QwenApiClient`. This client handles stateful conversations (`QwenConversationManager`, `QwenMidTokenManager`), SSE streaming, and parsing tool-use actions.
 
-| Provider | Class | Notes |
-| --- | --- | --- |
-| Alibaba Qwen | `QwenApiClient.java` | Stateful conversations (`QwenConversationManager`, `QwenMidTokenManager`), SSE streaming, tool actions.
-| Gemini Free (cookies) | `GeminiFreeApiClient.java` | Reverse-engineered endpoints, cookie rotation (`ROTATE_COOKIES_URL`).
-| Gemini Official | `GeminiOfficialApiClient.java` | API key from settings, JSON payloads via OkHttp.
-| DeepInfra | `DeepInfraApiClient.java` | Multiplex provider fallback, uses JSON completions.
-| AnyProvider | `AnyProviderApiClient.java` | Fallback aggregator for community endpoints.
-| OpenRouter | `OpenRouterApiClient.java` | Market-style provider; supports tool metadata.
-| OIVSCodeSer0501 | `OIVSCodeSer0501ApiClient.java` | Custom endpoint for OSS mirror.
-| WeWordle | `WeWordleApiClient.java` | Specialized chat with unique headers.
-
-Shared concerns:
-- All create an `OkHttpClient`, often with duplicated timeout settings.
-- Many spawn `new Thread` for network calls; consider centralizing to `ExecutorService`.
-- Error propagation uses `AIAssistant.AIActionListener` callbacks for UI updates.
+The previous multi-provider abstraction (`ApiClient.java`) has been removed, simplifying the architecture significantly. All AI-related network traffic is now managed through the `QwenApiClient`.
 
 ## Core Data & State Objects
 - `ChatMessage`: Chat payload with message types, plan steps (`ChatMessage.PlanStep`), tool usage, and file change proposals.
@@ -119,7 +102,6 @@ Shared concerns:
 - `AIModel`/`ModelCapabilities`: Define provider-specific features (streaming, tool support, file context).
 
 ## Managers, Utilities, and Helpers
-- `AiAssistantManager`: Coordinates AI calls, attaches plan execution, handles offline checks via `ConnectivityManager`.
 - `FileOps`: Read/write/copy, BOM handling, safe file rename operations.
 - `AdvancedFileManager` and `FileManager`: Bridge between Android storage APIs and internal file operations.
 - `PromptManager`: Supplies system prompts for general vs. agent mode usage.
@@ -130,13 +112,13 @@ Shared concerns:
 ## UI Layer Breakdown
 - **Activities**: `MainActivity`, `EditorActivity`, `SettingsActivity`, `ModelsActivity`, `AboutActivity`, `PreviewActivity`, `DebugActivity`.
 - **Fragments**: `AIChatFragment`, `CodeEditorFragment`.
-- **Adapters**: `ChatMessageAdapter`, `FileActionAdapter`, `ProjectsAdapter`, `RecentProjectsAdapter`, `ModelAdapter`, `SimpleSoraTabAdapter`, `SplitDiffAdapter`, `InlineDiffAdapter`, `WebSourcesAdapter`, `editor/adapters/MainPagerAdapter`.
+- **Adapters**: `ChatMessageAdapter`, `FileActionAdapter`, `ProjectsAdapter`, `RecentProjectsAdapter`, `ModelAdapter`, `SimpleSoraTabAdapter`, `SplitDiffAdapter`, `InlineDiffAdapter`, `WebSourcesAdapter`.
 - **Layout Resources**: Found under `app/src/main/res/layout/`, each adapter references specific item layouts (e.g., `item_chat_message_ai`, `item_plan_step`).
 
 Heavy adapters (notably `ChatMessageAdapter`) contain extensive binding logic (>600 LOC). Future work should divide responsibilities into dedicated view binders or Compose UI modules.
 
 ## Asynchronous Patterns
-- Uses raw `new Thread` for network tasks (`QwenApiClient`, `AIAssistant`, `GeminiFreeApiClient`, etc.).
+- Uses raw `new Thread` for network tasks (`QwenApiClient`, `AIAssistant`, etc.).
 - Streaming handled via callbacks from `SseClient`.
 - No centralized executor or coroutine usage; introducing `ExecutorService` or RxJava would reduce duplication and improve control.
 - UI updates rely on `runOnUiThread` or `Handler` posted from managers.
@@ -145,7 +127,7 @@ Heavy adapters (notably `ChatMessageAdapter`) contain extensive binding logic (>
 - Global crashes are caught by `CodeXApplication` and displayed in `DebugActivity` with stack traces passed via Intent extras.
 - API errors call `AIAssistant.AIActionListener.onAiError()`; ensure listener is non-null before invocation.
 - Logging mostly uses `Log.d`/`Log.e` inline; no structured logging.
-- Toasts provide user feedback (e.g., missing cookies in `GeminiFreeApiClient`).
+- Toasts provide user feedback for common errors.
 
 ## Resources & Assets
 - `assets/` contains prompt templates, stylesheets, and perhaps example projects (verify contents when extending).
@@ -154,16 +136,15 @@ Heavy adapters (notably `ChatMessageAdapter`) contain extensive binding logic (>
 - `res/xml/file_paths.xml` defines `FileProvider` paths matching `AndroidManifest.xml` provider entry.
 
 ## Performance & Stability Notes
-- Many classes exceed 500 lines (e.g., `AiAssistantManager`, `ChatMessageAdapter`, `PreviewActivity`, `QwenApiClient`, `GeminiFreeApiClient`). Split into cohesive modules to honor the project guideline and improve readability.
+- Many classes exceed 500 lines (e.g., `ChatMessageAdapter`, `PreviewActivity`, `QwenApiClient`). Split into cohesive modules to honor the project guideline and improve readability.
 - Markdown rendering and bitmap decoding occur inside `RecyclerView` binders; cache results or pre-process off the UI thread.
 - Frequent `new Thread().start()` calls may cause thread exhaustion; migrate to a shared executor.
 - SSE parsing in `QwenApiClient` builds strings aggressively; consider streaming JSON parsing.
-- `GeminiFreeApiClient` schedules background cookie refreshes; ensure `scheduler.shutdown()` on teardown to avoid leaks.
 
 ## Testing & Quality
 - No instrumentation/unit tests currently in repo. Recommended additions:
   - Unit tests for `QwenResponseParser`, `ToolExecutor`, `DiffGenerator`.
-  - Integration tests simulating AI chat flows with mock API clients.
+  - Integration tests simulating AI chat flows with a mock API client.
   - UI tests for `EditorActivity` using Espresso.
 - Enable Android Lint, PMD, or SpotBugs to detect unused code and complexity issues.
 - Consider adding CI workflow (GitHub Actions) to run `./gradlew lint test` on PRs.
@@ -171,30 +152,29 @@ Heavy adapters (notably `ChatMessageAdapter`) contain extensive binding logic (>
 ## Extending the Codebase
 
 ### Adding a New AI Provider
-1. Create `YourProviderApiClient` implementing `ApiClient` in `app/src/main/java/com/codex/apk/`.
-2. Add provider enum to `AIProvider` and default models in `AIModel` or persisted config.
-3. Update `AIAssistant.initializeApiClients()` to register the new client.
-4. Define provider-specific prompts or capabilities via `ModelCapabilities` if needed.
-5. Update UI (`ModelsActivity`, `SettingsActivity`) to expose configuration.
+The current architecture is tightly coupled to the `QwenApiClient`. To add a new provider, you would need to re-introduce an abstraction layer:
+1. Create an `ApiClient` interface that defines a common contract for sending messages.
+2. Refactor `AIAssistant` to hold a map of `ApiClient` implementations.
+3. Create a new class for your provider that implements the `ApiClient` interface.
+4. Update `AIAssistant` to initialize and use the new client based on the selected `AIModel`.
+5. Update UI (`ModelsActivity`, `SettingsActivity`) to expose any necessary configuration.
 
 ### Introducing Modular Architecture
-- Add AndroidX Lifecycle dependencies and migrate `EditorActivity` state into `EditorViewModel` (`editor/EditorViewModel.java`).
+- Add AndroidX Lifecycle dependencies and migrate `EditorActivity` state into a `ViewModel`.
 - Extract service layers (API, storage, diffing) behind interfaces. Consider dependency injection (Hilt or manual factory) to simplify unit testing.
 - For Compose adoption, port `ChatMessageAdapter` UI to composables for declarative updates.
 
 ### Tooling Enhancements
 - Extend `ToolExecutor` to support additional operations (e.g., new file creation templates) by updating `ToolSpec` definitions and handler logic.
-- Enhance `PlanExecutor` to visualize progress via `ChatMessage.PlanStep.status` updates.
 
 ## Known Refactoring Targets
-- `editor/AiAssistantManager.java` (~950 LOC).
 - `ChatMessageAdapter.java` (606 LOC) – split by view types.
-- `SimpleSoraTabAdapter.java`, `QwenApiClient.java`, `GeminiFreeApiClient.java`, `PreviewActivity.java`, `TemplateManager.java`, `ProjectManager.java` – all near or above threshold.
+- `QwenApiClient.java`, `PreviewActivity.java`, `TemplateManager.java`, `ProjectManager.java` – all near or above the 500 LOC threshold.
 - Consolidate file operations between `FileManager`, `AdvancedFileManager`, and `FileOps`.
-- Abstract duplicated OkHttp setup across API clients.
+- Abstract duplicated OkHttp setup across API clients if more clients are added in the future.
 
 ## Troubleshooting Guide
-- **Missing AI Responses**: Verify credentials in `SettingsActivity`. For Qwen, ensure `QwenMidTokenManager.ensureMidToken()` succeeds (check logcat for `QwenMidTokenManager`).
+- **Missing AI Responses**: For Qwen, ensure `QwenMidTokenManager.ensureMidToken()` succeeds (check logcat for `QwenMidTokenManager`). The app does not require external API keys.
 - **File Actions Not Applying**: Confirm `ToolExecutor` has storage permissions. `PermissionManager` handles runtime prompts; watch for denial in logs.
 - **Crash on Launch**: Inspect `DebugActivity` output. Common cause: missing theme resource referenced in `AndroidManifest.xml`.
 - **Markdown Rendering Issues**: Check `MarkdownFormatter.getInstance()` initialization; ensure Markwon dependencies are synced.
@@ -208,16 +188,16 @@ Heavy adapters (notably `ChatMessageAdapter`) contain extensive binding logic (>
 - Coordinate large refactors to avoid disrupting concurrent contributors; consider feature branches per module.
 
 ## Glossary
-- **Agent Mode**: When enabled, AI can produce action plans with tool invocations; toggled in `SettingsActivity`.
+- **Agent Mode**: When enabled, AI can produce action plans with tool invocations.
 - **Thinking Mode**: Adds chain-of-thought style responses stored in `ChatMessage.getThinkingContent()`.
 - **Plan Steps**: Structured actions produced by AI, rendered via plan cards in `ChatMessageAdapter`.
 - **Tool Usage**: Metadata on executed tools displayed as chips in AI messages.
 
 ## Dependency Appendix
-- `com.squareup.okhttp3:okhttp`: HTTP client for all API integrations; see `QwenApiClient` and `GeminiFreeApiClient` for usage patterns.
-- `com.google.code.gson:gson`: JSON parsing building blocks (`JsonParser`, `JsonObject`) throughout API clients.
+- `com.squareup.okhttp3:okhttp`: HTTP client for API integration; see `QwenApiClient` for usage patterns.
+- `com.google.code.gson:gson`: JSON parsing building blocks (`JsonParser`, `JsonObject`) throughout the API client.
 - `io.noties.markwon:*`: Markdown parsing and rendering; used in `MarkdownFormatter` and `ChatMessageAdapter`.
-- `org.eclipse.jgit:org.eclipse.jgit`: Git commands in `GitManager` for commit/push/diff.
+- `org.eclipse.jgit:org.eclipse.jgit`: Git commands in `GitManager` for cloning.
 - `commons-io:commons-io`: Utility methods for file copying and stream handling in `FileOps`.
 - `androidx.recyclerview:*`: Backbone for list presentations (chat, projects, tabs).
 - `io.github.rosemoe:editor-*`: Advanced code editor component embedded in `CodeEditorFragment`.
