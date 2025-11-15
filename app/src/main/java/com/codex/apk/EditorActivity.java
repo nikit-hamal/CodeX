@@ -2,6 +2,7 @@ package com.codex.apk;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -353,10 +354,52 @@ public class EditorActivity extends AppCompatActivity implements
     }
 
     @Override
+    public void sendAiPrompt(String userPrompt, List<ChatMessage> chatHistory, QwenConversationState qwenState) {
+        this.lastUserPrompt = userPrompt;
+        tabManager.getActiveTabItem(); // Ensure active tab is retrieved before sending prompt
+        aiAssistantManager.sendAiPrompt(userPrompt, chatHistory, qwenState, tabManager.getActiveTabItem()); // Delegate to AiAssistantManager
+    }
+
+    // Removed direct delegation of onAiErrorReceived, onAiRequestStarted, onAiRequestCompleted
+    // as these are handled internally by AiAssistantManager's AIActionListener.
+    // The AIChatFragment will call these methods directly on itself, and AiAssistantManager's
+    // AIActionListener will then update the AIChatFragment.
+
+    @Override
+    public void onAiAcceptActions(int messagePosition, ChatMessage message) {
+        aiAssistantManager.onAiAcceptActions(messagePosition, message); // Delegate to AiAssistantManager
+    }
+
+    @Override
+    public void onAiDiscardActions(int messagePosition, ChatMessage message) {
+        aiAssistantManager.onAiDiscardActions(messagePosition, message); // Delegate to AiAssistantManager
+    }
+
+    @Override
+    public void onReapplyActions(int messagePosition, ChatMessage message) { // Added this method implementation
+        aiAssistantManager.onReapplyActions(messagePosition, message); // FIX: Delegate to AiAssistantManager
+    }
+
+    @Override
+    public void onAiFileChangeClicked(ChatMessage.FileActionDetail fileActionDetail) {
+        aiAssistantManager.onAiFileChangeClicked(fileActionDetail); // Delegate to AiAssistantManager
+    }
+
+    @Override
     public void onQwenConversationStateUpdated(QwenConversationState state) {
         if (aiChatFragment != null) {
             aiChatFragment.onQwenConversationStateUpdated(state);
         }
+    }
+
+    @Override
+    public void onPlanAcceptClicked(int messagePosition, ChatMessage message) {
+        aiAssistantManager.acceptPlan(messagePosition, message);
+    }
+
+    @Override
+    public void onPlanDiscardClicked(int messagePosition, ChatMessage message) {
+        aiAssistantManager.discardPlan(messagePosition, message);
     }
 
     // Public methods for managers to call back to EditorActivity for UI updates or core actions
@@ -405,6 +448,10 @@ public class EditorActivity extends AppCompatActivity implements
 
     public TabItem getActiveTab() {
         return tabManager != null ? tabManager.getActiveTabItem() : null;
+    }
+
+    public QwenConversationState getQwenState() {
+        return aiChatFragment != null ? aiChatFragment.getQwenState() : new QwenConversationState();
     }
 
     public String getLastUserPrompt() { return lastUserPrompt; }

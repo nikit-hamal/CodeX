@@ -3,6 +3,7 @@ package com.codex.apk;
 import android.content.Context;
 import android.util.Log;
 import com.codex.apk.ai.AIModel;
+import com.codex.apk.ai.AIProvider;
 import com.codex.apk.ai.ModelCapabilities;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -305,7 +306,107 @@ public class QwenApiClient implements StreamingApiClient {
     }
 
     private void processFinalText(String completedText, String rawSse, StreamListener listener, MessageRequest request, QwenConversationState state) {
-        listener.onStreamCompleted(request.getRequestId(), completedText);
+        String jsonToParse = com.codex.apk.util.JsonUtils.extractJsonFromCodeBlock(completedText);
+        if (jsonToParse == null && com.codex.apk.util.JsonUtils.looksLikeJson(completedText)) {
+            jsonToParse = completedText;
+        }
+
+        if (jsonToParse != null) {
+            try {
+                JsonObject maybe = JsonParser.parseString(jsonToParse).getAsJsonObject();
+                if (maybe.has("action") && "tool_call".equalsIgnoreCase(maybe.get("action").getAsString()) && maybe.has("tool_calls")) {
+                    new Thread(() -> {
+                        performToolContinuation(maybe.getAsJsonArray("tool_calls"), request, state, listener);
+                    }).start();
+                    return;
+                }
+            } catch (Exception ignore) {}
+        }
+
+        QwenResponseParser.parseResponseAsync(completedText, rawSse, new QwenResponseParser.ParseResultListener() {
+            @Override
+            public void onParseSuccess(QwenResponseParser.ParsedResponse parsedResponse) {
+                listener.onStreamCompleted(request.getRequestId(), parsedResponse);
+            }
+
+            @Override
+            public void onParseFailed() {
+                QwenResponseParser.ParsedResponse fallback = new QwenResponseParser.ParsedResponse();
+                fallback.action = "message";
+                fallback.explanation = completedText;
+                fallback.rawResponse = rawSse;
+                fallback.isValid = true;
+                listener.onStreamCompleted(request.getRequestId(), fallback);
+            }
+        });
+    }
+
+    private void performToolContinuation(JsonArray toolCalls, MessageRequest originalRequest, QwenConversationState state, StreamListener listener) {
+        ParallelToolExecutor executor = new ParallelToolExecutor(projectDir);
+        List<ChatMessage.ToolUsage> toolUsages = new ArrayList<>();
+        for (int i = 0; i < toolCalls.size(); i++) {
+            try {
+                JsonObject call = toolCalls.get(i).getAsJsonObject();
+                String toolName = call.get("name").getAsString();
+                JsonObject args = call.has("args") && call.get("args").isJsonObject() ? call.getAsJsonObject("args") : new JsonObject();
+                ChatMessage.ToolUsage usage = new ChatMessage.ToolUsage(toolName);
+                usage.argsJson = args.toString();
+                toolUsages.add(usage);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to parse tool call from JSON", e);
+            }
+        }
+
+        executor.executeTools(toolUsages).thenAccept(results -> {
+            try {
+                JsonArray jsonResults = new JsonArray();
+                for (ParallelToolExecutor.ToolResult result : results) {
+                    JsonObject res = new JsonObject();
+                    res.addProperty("toolName", result.toolName);
+                    res.add("result", result.result);
+                    jsonResults.add(res);
+                }
+
+                String continuation = ToolExecutor.buildToolResultContinuation(jsonResults);
+                JsonObject requestBody = QwenRequestFactory.buildContinuationRequestBody(state, originalRequest.getModel(), continuation);
+
+                // Continue with the streaming logic here...
+                continueStreamingWithToolResults(requestBody, originalRequest, state, listener);
+
+            } catch (Exception e) {
+                listener.onStreamError(originalRequest.getRequestId(), "Failed to process tool results", e);
+            }
+        });
+    }
+
+    private void continueStreamingWithToolResults(JsonObject requestBody, MessageRequest originalRequest, QwenConversationState state, StreamListener listener) throws IOException {
+        String qwenToken = midTokenManager.ensureMidToken(false);
+        okhttp3.Headers headers = QwenRequestFactory.buildQwenHeaders(qwenToken, state.getConversationId())
+                .newBuilder().add("Accept", "text/event-stream").build();
+
+        SseClient sse = new SseClient(httpClient);
+        activeStreams.put(originalRequest.getRequestId(), sse);
+
+        final StringBuilder finalText = new StringBuilder();
+        final StringBuilder rawSse = new StringBuilder();
+
+        sse.postStreamWithRetry(QWEN_BASE_URL + "/chat/completions?chat_id=" + state.getConversationId(), headers, requestBody, 3, 500L, new SseClient.Listener() {
+            @Override public void onOpen() {}
+            @Override public void onDelta(JsonObject chunk) {
+                rawSse.append("data: ").append(chunk.toString()).append('\n');
+                QwenStreamProcessor.processChunk(chunk, state, finalText, (partialResult, isThinking) -> {
+                    listener.onStreamPartialUpdate(originalRequest.getRequestId(), partialResult, isThinking);
+                }, actionListener);
+            }
+            @Override public void onUsage(JsonObject usage) {}
+            @Override public void onError(String message, int code) {
+                listener.onStreamError(originalRequest.getRequestId(), "HTTP " + code + ": " + message, null);
+            }
+            @Override public void onComplete() {
+                activeStreams.remove(originalRequest.getRequestId());
+                processFinalText(finalText.toString(), rawSse.toString(), listener, originalRequest, state);
+            }
+        });
     }
 
     private String performNonStreamingCompletion(MessageRequest request, QwenConversationState state) throws IOException {

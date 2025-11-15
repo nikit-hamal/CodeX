@@ -7,18 +7,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
-import com.codex.apk.ai.ToolExecutor;
-import java.util.Map;
-import com.google.gson.Gson;
 
 public class ParallelToolExecutor {
 
     private final File projectDir;
-    private final ToolExecutor toolExecutor;
 
     public ParallelToolExecutor(File projectDir) {
         this.projectDir = projectDir;
-        this.toolExecutor = new ToolExecutor(null, projectDir.getAbsolutePath());
     }
 
     public static class ToolResult {
@@ -45,12 +40,12 @@ public class ParallelToolExecutor {
     private CompletableFuture<ToolResult> executeSingleTool(ChatMessage.ToolUsage tool) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                Map<String, Object> args = new Gson().fromJson(tool.argsJson, Map.class);
-                String result = toolExecutor.execute(tool.toolName, args);
-                JsonObject resultJson = new JsonObject();
-                resultJson.addProperty("ok", true);
-                resultJson.addProperty("result", result);
-                return new ToolResult(tool.toolName, resultJson);
+                JsonObject args = new JsonObject();
+                if (tool.argsJson != null && !tool.argsJson.isEmpty()) {
+                    args = com.google.gson.JsonParser.parseString(tool.argsJson).getAsJsonObject();
+                }
+                JsonObject result = ToolExecutor.execute(projectDir, tool.toolName, args);
+                return new ToolResult(tool.toolName, result);
             } catch (Exception e) {
                 JsonObject errorResult = new JsonObject();
                 errorResult.addProperty("ok", false);

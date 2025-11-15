@@ -16,7 +16,6 @@ import com.codex.apk.ai.WebSource;
 public class ChatMessage {
     public static final int SENDER_USER = 0;
     public static final int SENDER_AI = 1;
-    public static final int SENDER_TOOL = 2;
 
     // Status constants for AI messages with proposed actions
     public static final int STATUS_NONE = -1; // Default for user messages or AI thinking/error messages
@@ -95,32 +94,6 @@ public class ChatMessage {
         this.childrenIds = new ArrayList<>();
     }
 
-    public ChatMessage(String sender, String content) {
-        switch (sender) {
-            case "user":
-                this.sender = SENDER_USER;
-                break;
-            case "assistant":
-                this.sender = SENDER_AI;
-                break;
-            case "tool":
-                this.sender = SENDER_TOOL;
-                break;
-        }
-        this.content = content;
-        this.timestamp = System.currentTimeMillis();
-        this.status = STATUS_NONE;
-        this.actionSummaries = new ArrayList<>();
-        this.suggestions = new ArrayList<>();
-        this.proposedFileChanges = new ArrayList<>();
-        this.webSources = new ArrayList<>();
-        this.planSteps = new ArrayList<>();
-        this.toolUsages = new ArrayList<>();
-        this.fid = java.util.UUID.randomUUID().toString();
-        this.parentId = null;
-        this.childrenIds = new ArrayList<>();
-    }
-
     // Getters
     public int getSender() { return sender; }
     public String getContent() { return content; }
@@ -158,7 +131,6 @@ public class ChatMessage {
     public void setPlanSteps(List<PlanStep> planSteps) { this.planSteps = planSteps; }
     public void setUserAttachmentPaths(List<String> paths) { this.userAttachmentPaths = paths != null ? new ArrayList<>(paths) : new ArrayList<>(); }
     public void setToolUsages(List<ToolUsage> toolUsages) { this.toolUsages = toolUsages != null ? new ArrayList<>(toolUsages) : new ArrayList<>(); }
-    public void setRawAiResponseJson(String rawAiResponseJson) { this.rawAiResponseJson = rawAiResponseJson; }
 
     public com.google.gson.JsonObject toJsonObject() {
         com.google.gson.JsonObject jsonObject = new com.google.gson.JsonObject();

@@ -53,8 +53,10 @@ public class PlanExecutor {
         AIChatFragment aiChatFragment = activity.getAiChatFragment();
         if (aiChatFragment != null) {
             aiChatFragment.updateMessage(messagePosition, message);
+            aiChatFragment.hideThinkingMessage();
         }
 
+        aiAssistantManager.setCurrentStreamingMessagePosition(null);
         sendNextPlanStepFollowUp();
     }
 
@@ -72,7 +74,7 @@ public class PlanExecutor {
         if (fileActions != null && !fileActions.isEmpty()) {
             planStepRetryCount = 0;
             AIChatFragment frag = activity.getAiChatFragment();
-            ChatMessage planMsg = frag.getChatHistory().get(lastPlanMessagePosition);
+            ChatMessage planMsg = frag.getMessageAt(lastPlanMessagePosition);
             if (planMsg != null) {
                 try {
                     List<ChatMessage.PlanStep> steps = planMsg.getPlanSteps();
@@ -88,13 +90,14 @@ public class PlanExecutor {
                 merged.addAll(fileActions);
                 planMsg.setProposedFileChanges(merged);
                 frag.updateMessage(lastPlanMessagePosition, planMsg);
+                aiAssistantManager.onAiAcceptActions(lastPlanMessagePosition, planMsg);
                 return;
             }
         } else {
             try {
                 AIChatFragment frag = activity.getAiChatFragment();
                 if (frag != null) {
-                    ChatMessage planMsg = frag.getChatHistory().get(lastPlanMessagePosition);
+                    ChatMessage planMsg = frag.getMessageAt(lastPlanMessagePosition);
                     if (planMsg != null) {
                         List<ChatMessage.PlanStep> steps = planMsg.getPlanSteps();
                         if (steps != null && planProgressIndex < steps.size()) {
@@ -115,7 +118,7 @@ public class PlanExecutor {
                 // We must update the UI to show the failed state
                 AIChatFragment frag = activity.getAiChatFragment();
                 if (lastPlanMessagePosition != null && frag != null) {
-                    ChatMessage planMsg = frag.getChatHistory().get(lastPlanMessagePosition);
+                    ChatMessage planMsg = frag.getMessageAt(lastPlanMessagePosition);
                     if (planMsg != null) frag.updateMessage(lastPlanMessagePosition, planMsg);
                 }
                 // Don't halt, just move to the next step
@@ -131,7 +134,7 @@ public class PlanExecutor {
         setCurrentRunningPlanStepStatus("completed");
         AIChatFragment frag = activity.getAiChatFragment();
         if (lastPlanMessagePosition != null && frag != null) {
-            ChatMessage planMsg = frag.getChatHistory().get(lastPlanMessagePosition);
+            ChatMessage planMsg = frag.getMessageAt(lastPlanMessagePosition);
             if (planMsg != null) frag.updateMessage(lastPlanMessagePosition, planMsg);
         }
         sendNextPlanStepFollowUp();
@@ -141,7 +144,7 @@ public class PlanExecutor {
         if (lastPlanMessagePosition == null) return;
         AIChatFragment frag = activity.getAiChatFragment();
         if (frag == null) return;
-        ChatMessage planMsg = frag.getChatHistory().get(lastPlanMessagePosition);
+        ChatMessage planMsg = frag.getMessageAt(lastPlanMessagePosition);
         if (planMsg == null || planMsg.getPlanSteps() == null || planMsg.getPlanSteps().isEmpty()) return;
 
         List<ChatMessage.PlanStep> steps = planMsg.getPlanSteps();
@@ -165,7 +168,7 @@ public class PlanExecutor {
         if (lastPlanMessagePosition == null) return;
         AIChatFragment frag = activity.getAiChatFragment();
         if (frag == null) return;
-        ChatMessage planMsg = frag.getChatHistory().get(lastPlanMessagePosition);
+        ChatMessage planMsg = frag.getMessageAt(lastPlanMessagePosition);
         if (planMsg == null || planMsg.getPlanSteps() == null || planMsg.getPlanSteps().isEmpty()) return;
         List<ChatMessage.PlanStep> steps = planMsg.getPlanSteps();
         if (planProgressIndex < steps.size()) {
@@ -180,7 +183,7 @@ public class PlanExecutor {
     public void finalizePlanExecution(String toastMessage, boolean sanitizeDanglingRunning) {
         AIChatFragment frag = activity.getAiChatFragment();
         if (sanitizeDanglingRunning && frag != null && lastPlanMessagePosition != null) {
-            ChatMessage pm = frag.getChatHistory().get(lastPlanMessagePosition);
+            ChatMessage pm = frag.getMessageAt(lastPlanMessagePosition);
             if (pm != null && pm.getPlanSteps() != null) {
                 boolean changed = false;
                 for (ChatMessage.PlanStep ps : pm.getPlanSteps()) {
@@ -190,6 +193,8 @@ public class PlanExecutor {
             }
         }
         isExecutingPlan = false;
+        if (frag != null) { frag.hideThinkingMessage(); }
+        aiAssistantManager.setCurrentStreamingMessagePosition(null);
         lastPlanMessagePosition = null;
         planProgressIndex = 0;
         planStepRetryCount = 0;
@@ -204,7 +209,7 @@ public class PlanExecutor {
             finalizePlanExecution("Plan completed", true);
             return;
         }
-        ChatMessage planMsg = frag.getChatHistory().get(lastPlanMessagePosition);
+        ChatMessage planMsg = frag.getMessageAt(lastPlanMessagePosition);
         if (planMsg == null || planMsg.getPlanSteps() == null || planMsg.getPlanSteps().isEmpty()) {
             finalizePlanExecution("Plan completed", true);
             return;
@@ -233,12 +238,12 @@ public class PlanExecutor {
         setNextPlanStepStatus("running");
         activity.runOnUiThread(() -> {
             if (lastPlanMessagePosition != null) {
-                ChatMessage pm = activity.getAiChatFragment().getChatHistory().get(lastPlanMessagePosition);
+                ChatMessage pm = activity.getAiChatFragment().getMessageAt(lastPlanMessagePosition);
                 if (pm != null) activity.getAiChatFragment().updateMessage(lastPlanMessagePosition, pm);
             }
         });
 
-        aiAssistantManager.sendAiPrompt(prompt.toString(), new ArrayList<>(), new com.codex.apk.QwenConversationState(), activity.getActiveTab());
+        aiAssistantManager.sendAiPrompt(prompt.toString(), new ArrayList<>(), activity.getQwenState(), activity.getActiveTab());
     }
 
     private boolean isActionableStepKind(String kind) {

@@ -1,23 +1,228 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:gravity="start"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
 
-    <TextView
-        android:id="@+id/text_message"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="start"
-        android:background="@drawable/bg_ai_message"
-        android:padding="12dp"
-        android:textColor="@android:color/black" />
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/tool_calls_container"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp" />
+        android:orientation="vertical">
 
+        <!-- Model Name with Background -->
+        <TextView
+            android:id="@+id/text_ai_model_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Model"
+            android:textColor="@color/on_primary_container"
+            android:textSize="12sp"
+            android:background="@drawable/rounded_model_name_background"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- AI Typing Indicator (minimal) -->
+        <LinearLayout
+            android:id="@+id/layout_typing_indicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="0dp"
+            android:paddingVertical="0dp"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/text_typing_indicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="AI is thinking..."
+                android:textColor="@color/on_surface_variant"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Thinking Section (Collapsible) -->
+        <LinearLayout
+            android:id="@+id/layout_thinking_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/layout_thinking_header"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="8dp">
+
+                <TextView
+                    android:id="@+id/text_thinking_header_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Thoughts"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                    android:textColor="@color/on_surface"
+                    android:textSize="12sp"
+                    android:drawableEnd="@drawable/icon_expand_more_round"
+                    android:drawablePadding="6dp"
+                    app:drawableTint="@color/on_surface_variant" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/text_thinking_content"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/on_surface_variant"
+                android:textSize="12sp"
+                android:lineSpacingExtra="2dp"
+                android:visibility="gone"
+                android:text="AI thinking process will appear here..."
+                android:textIsSelectable="true" />
+
+        </LinearLayout>
+
+        <!-- Main AI Message Content -->
+        <TextView
+            android:id="@+id/text_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/on_surface"
+            android:textSize="14sp"
+            android:layout_marginBottom="8dp"
+            android:text="AI Explanation will go here."
+            android:textIsSelectable="true" />
+
+        <!-- AI attachments preview (optional) -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_ai_attachments"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+        <!-- Plan Card (v2) -->
+        <include
+            android:id="@+id/include_plan_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            layout="@layout/item_plan_card"/>
+
+        <!-- Proposed file changes list (no header) -->
+        <LinearLayout
+            android:id="@+id/layout_proposed_file_changes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="16dp"
+            android:visibility="gone">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/file_changes_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+        </LinearLayout>
+
+        <!-- File actions approval (shown only when NOT in agent mode) -->
+        <LinearLayout
+            android:id="@+id/layout_file_actions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp"
+            android:gravity="end"
+            android:visibility="gone">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/button_discard_file_actions"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Discard" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/button_accept_file_actions"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Accept" />
+        </LinearLayout>
+
+        <!-- Web Sources Section -->
+        <LinearLayout
+            android:id="@+id/layout_web_sources"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/button_web_sources"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Web sources"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textColor="@color/primary"
+                android:background="@drawable/rounded_web_sources_background"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="6dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/layout_tools_used"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tools used"
+                android:textColor="@color/on_surface_variant"
+                android:textSize="12sp"
+                android:layout_marginBottom="4dp"/>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_tools_used"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"/>
+        </LinearLayout>
+
+
+        <!-- Old plan actions removed in favor of v2 inside card -->
+
+        <!-- Thinking indicator at bottom for running steps -->
+        <TextView
+            android:id="@+id/text_agent_thinking"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AI is thinking..."
+            android:textColor="@color/on_surface_variant"
+            android:textSize="12sp"
+            android:paddingTop="8dp"
+            android:visibility="gone" />
+
+    </LinearLayout>
 </LinearLayout>

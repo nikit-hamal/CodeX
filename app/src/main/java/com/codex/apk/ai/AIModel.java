@@ -222,7 +222,11 @@ public class AIModel {
     public static List<AIModel> getAllModels() {
         List<AIModel> allModels = new ArrayList<>();
         for (List<AIModel> modelList : modelsByProvider.values()) {
-            allModels.addAll(modelList);
+            for (AIModel model : modelList) {
+                if (model.getProvider() == AIProvider.QWEN) {
+                    allModels.add(model);
+                }
+            }
         }
         return allModels;
     }

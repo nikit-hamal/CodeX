@@ -3,7 +3,7 @@ package com.codex.apk.editor;
 import android.util.Log;
 
 import com.codex.apk.ChatMessage;
-import com.codex.apk.ai.ToolExecutor;
+import com.codex.apk.ToolExecutor;
 import com.codex.apk.AIChatFragment;
 import com.codex.apk.EditorActivity;
 
@@ -76,8 +76,7 @@ public class ToolExecutionCoordinator {
         toolsMessage.setToolUsages(usages);
 
         lastToolUsages = usages;
-        uiFrag.addMessage(toolsMessage);
-        return uiFrag.getChatHistory().size() - 1;
+        return uiFrag.addMessage(toolsMessage);
     }
 
     public void executeTools(JsonArray toolCalls,
@@ -106,7 +105,7 @@ public class ToolExecutionCoordinator {
 
                 if (uiFrag != null && toolsMessagePosition != null) {
                     int finalIndex = toolsMessagePosition;
-                    activity.runOnUiThread(() -> uiFrag.updateMessage(finalIndex, uiFrag.getChatHistory().get(finalIndex)));
+                    activity.runOnUiThread(() -> uiFrag.updateMessage(finalIndex, uiFrag.getMessageAt(finalIndex)));
                 }
             }
 
