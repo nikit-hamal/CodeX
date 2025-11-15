@@ -57,7 +57,7 @@ public class AiStreamingHandler {
                                    int messagePosition,
                                    String partialResponse,
                                    boolean isThinking) {
-        if (chatFragment == null) {
+        if (chatFragment == null || partialResponse == null || partialResponse.isEmpty()) {
             return;
         }
 
@@ -66,12 +66,40 @@ public class AiStreamingHandler {
             return;
         }
 
-        if (isThinking) {
-            existing.setContent(partialResponse != null ? partialResponse : existing.getContent());
+        // The streaming response can contain multiple JSON objects, so we need to parse them.
+        String[] chunks = partialResponse.split("}(?=\\{)");
+        StringBuilder contentBuilder = new StringBuilder(existing.getContent());
+
+        for (String chunk : chunks) {
+            try {
+                // Ensure the chunk is a valid JSON object before parsing.
+                String jsonChunk = chunk.endsWith("}") ? chunk : chunk + "}";
+                org.json.JSONObject json = new org.json.JSONObject(jsonChunk);
+                org.json.JSONArray choices = json.optJSONArray("choices");
+                if (choices != null && choices.length() > 0) {
+                    org.json.JSONObject delta = choices.getJSONObject(0).optJSONObject("delta");
+                    if (delta != null && delta.has("content")) {
+                        contentBuilder.append(delta.getString("content"));
+                    }
+                }
+            } catch (org.json.JSONException e) {
+                // In case of a parsing error, we can log it or handle it gracefully.
+                // For now, we'll just skip the malformed chunk.
+            }
+        }
+
+        String newContent = contentBuilder.toString();
+        // The "thinking" message should be replaced by the first bit of content.
+        if (activity.getString(com.codex.apk.R.string.ai_is_thinking).equals(existing.getContent())) {
+            existing.setContent(newContent);
         } else {
-            existing.setContent(partialResponse != null ? partialResponse : existing.getContent());
+            existing.setContent(newContent);
+        }
+
+        if (!isThinking) {
             existing.setThinkingContent(null);
         }
+
         throttler.scheduleUpdate(() -> chatFragment.updateMessage(messagePosition, existing), 15);
     }
 }
