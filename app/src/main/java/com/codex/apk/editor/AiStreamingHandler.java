@@ -67,7 +67,8 @@ public class AiStreamingHandler {
         }
 
         // The streaming response can contain multiple JSON objects, so we need to parse them.
-        String[] chunks = partialResponse.split("}(?=\\{)");
+        // We replace `}{` with `}\n{` to create a delimiter and then split by the newline.
+        String[] chunks = partialResponse.replace("}{", "}\n{").split("\n");
         StringBuilder contentBuilder = new StringBuilder(existing.getContent());
 
         for (String chunk : chunks) {
