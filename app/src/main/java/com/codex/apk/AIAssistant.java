@@ -105,7 +105,7 @@ public class AIAssistant {
                 .build();
 
             ((StreamingApiClient) apiClient).sendMessageStreaming(request, new StreamingApiClient.StreamListener() {
-                private StringBuilder fullResponse = new StringBuilder();
+                private String latestResponse = "";
 
                 @Override
                 public void onStreamStarted(String requestId) {
@@ -114,12 +114,14 @@ public class AIAssistant {
 
                 @Override
                 public void onStreamPartialUpdate(String requestId, String partialResponse, boolean isThinking) {
-                    fullResponse.append(partialResponse);
+                    // partialResponse is already the full accumulated text from QwenStreamProcessor
+                    latestResponse = partialResponse;
                 }
 
                 @Override
                 public void onStreamCompleted(String requestId, QwenResponseParser.ParsedResponse response) {
-                    callback.onSuccess(fullResponse.toString());
+                    // Use the final accumulated response text
+                    callback.onSuccess(latestResponse);
                 }
 
                 @Override
