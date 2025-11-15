@@ -516,7 +516,6 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
         onAiRequestCompleted();
     }
 
-    @Override
     public void onAiActionsProcessed(ChatMessage message) {
         onAiActionsProcessedInternal(message.getRawAiResponseJson(), message.getContent(), message.getSuggestions(), message.getProposedFileChanges(), message.getPlanSteps(), message.getAiModelName(), message.getThinkingContent(), message.getWebSources());
     }
