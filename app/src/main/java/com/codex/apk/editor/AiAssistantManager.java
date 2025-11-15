@@ -168,4 +168,16 @@ public class AiAssistantManager implements AIAssistant.AIActionListener {
     public void onStreamError(String requestId, String errorMessage, Throwable throwable) {
         onAiError(errorMessage);
     }
+
+    @Override
+    public void onStreamStarted(String requestId) {
+    }
+
+    @Override
+    public void onStreamPartialUpdate(String requestId, String partialResponse, boolean isThinking) {
+    }
+
+    @Override
+    public void onStreamCompleted(String requestId, String response) {
+    }
 }
