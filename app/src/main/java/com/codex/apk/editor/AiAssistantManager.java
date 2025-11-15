@@ -290,7 +290,6 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
         onAiActionsProcessedInternal(rawAiResponseJson, explanation, suggestions, proposedFileChanges, new ArrayList<>(), aiModelDisplayName, null, null);
     }
 
-    @Override
     public void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions, List<ChatMessage.FileActionDetail> proposedFileChanges, List<ChatMessage.PlanStep> planSteps, String aiModelDisplayName) {
         onAiActionsProcessedInternal(rawAiResponseJson, explanation, suggestions, proposedFileChanges, planSteps, aiModelDisplayName, null, null);
     }
