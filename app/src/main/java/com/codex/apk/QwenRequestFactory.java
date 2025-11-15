@@ -1,39 +1,10 @@
 package com.codex.apk;
 
 import com.codex.apk.ai.AIModel;
+import com.codex.apk.tools.Tool;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.util.List;
-
-public class QwenRequestFactory {
-    private static final String QWEN_BX_V = "2.5.31";
-
-    public static okhttp3.Headers buildQwenHeaders(String midtoken, String conversationId) {
-        okhttp3.Headers.Builder builder = new okhttp3.Headers.Builder()
-                .add("Authorization", "Bearer")
-                .add("Content-Type", "application/json")
-                .add("Accept", "*/*")
-                .add("bx-umidtoken", midtoken)
-                .add("bx-v", QWEN_BX_V)
-                .add("Accept-Language", "en-US,en;q=0.9")
-                .add("Connection", "keep-alive")
-                .add("Origin", "https://chat.qwen.ai")
-                .add("Sec-Fetch-Dest", "empty")
-                .add("Sec-Fetch-Mode", "cors")
-                .add("Sec-Fetch-Site", "same-origin")
-                .add("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
-                .add("Source", "web");
-
-        if (conversationId != null) {
-            builder.add("Referer", "https://chat.qwen.ai/c/" + conversationId);
-        } else {
-            builder.add("Referer", "https://chat.qwen.ai/");
-        }
-
-        return builder.build();
-    }
-
-import com.codex.apk.tools.Tool;
 
 public class QwenRequestFactory {
     private static final String QWEN_BX_V = "2.5.31";
@@ -84,7 +55,18 @@ public class QwenRequestFactory {
         requestBody.add("messages", messages);
 
         if (enabledTools != null && !enabledTools.isEmpty()) {
-            requestBody.add("tools", ToolSpec.toJsonArray(enabledTools));
+            JsonArray tools = new JsonArray();
+            for (Tool tool : enabledTools) {
+                JsonObject toolJson = new JsonObject();
+                toolJson.addProperty("type", "function");
+                JsonObject functionJson = new JsonObject();
+                functionJson.addProperty("name", tool.getName());
+                functionJson.addProperty("description", tool.getDescription());
+                functionJson.add("parameters", new JsonParser().parse(tool.getParameterSchema().toString()));
+                toolJson.add("function", functionJson);
+                tools.add(toolJson);
+            }
+            requestBody.add("tools", tools);
             JsonObject toolChoice = new JsonObject();
             toolChoice.addProperty("type", "auto");
             requestBody.add("tool_choice", toolChoice);
