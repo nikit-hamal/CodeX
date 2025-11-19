@@ -32,14 +32,10 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 
 /**
-import com.codex.apk.QwenResponseParser;
-import com.codex.apk.StreamingApiClient;
-
-/**
  * Manages the interaction with the AIAssistant, handling UI updates and delegation
  * of AI-related actions from EditorActivity to the core AIAssistant logic.
  */
-public class AiAssistantManager implements AIAssistant.AIActionListener, com.codex.apk.StreamingApiClient.StreamListener {
+public class AiAssistantManager implements AIAssistant.OnToolApprovalListener, com.codex.apk.StreamingApiClient.StreamListener {
 
     private static final String TAG = "AiAssistantManager";
     private final EditorActivity activity; // Reference to the hosting activity
@@ -539,5 +535,23 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
     public void onStreamError(String requestId, String errorMessage, Throwable throwable) {
         onAiError(errorMessage);
         onAiRequestCompleted();
+    }
+
+    @Override
+    public void onToolExecutionRequest(String requestId, List<ChatMessage.ToolUsage> toolUsages, com.codex.apk.StreamingApiClient.ToolExecutionCallback callback) {
+        onToolApprovalRequest(toolUsages, callback);
+    }
+
+    @Override
+    public void onToolApprovalRequest(List<ChatMessage.ToolUsage> toolUsages, com.codex.apk.StreamingApiClient.ToolExecutionCallback callback) {
+        activity.runOnUiThread(() -> {
+            AIChatFragment chatFragment = activity.getAiChatFragment();
+            if (chatFragment != null) {
+                chatFragment.showToolApprovalDialog(toolUsages, callback);
+            } else {
+                // Fallback if UI not available: cancel to be safe
+                callback.onCancel();
+            }
+        });
     }
 }

@@ -361,4 +361,54 @@ public class AIChatFragment extends Fragment implements ChatMessageAdapter.OnAiA
             historyManager.saveChatState(chatHistory, qwenConversationState);
         }
     }
+
+    public void showToolApprovalDialog(List<ChatMessage.ToolUsage> toolUsages, com.codex.apk.StreamingApiClient.ToolExecutionCallback callback) {
+        if (getContext() == null) {
+            callback.onCancel();
+            return;
+        }
+
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(requireContext());
+        builder.setTitle("Approve Agent Actions");
+        builder.setCancelable(false);
+
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(requireContext());
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(32, 32, 32, 32);
+
+        for (ChatMessage.ToolUsage tool : toolUsages) {
+            android.widget.TextView toolView = new android.widget.TextView(requireContext());
+            toolView.setTextSize(14);
+            toolView.setTextColor(android.graphics.Color.BLACK); 
+            
+            StringBuilder toolInfo = new StringBuilder();
+            toolInfo.append("• ").append(tool.toolName).append("\n");
+            
+            try {
+                org.json.JSONObject args = new org.json.JSONObject(tool.argumentsJson);
+                if (args.has("path")) toolInfo.append("  Path: ").append(args.getString("path")).append("\n");
+                else if (args.has("target_file")) toolInfo.append("  File: ").append(args.getString("target_file")).append("\n");
+                else if (args.has("source_path")) toolInfo.append("  Source: ").append(args.getString("source_path")).append("\n");
+                
+                if ("replace_in_file".equals(tool.toolName)) {
+                     toolInfo.append("  (Contains diff/changes)\n");
+                }
+            } catch (Exception e) {
+                toolInfo.append("  Args: ").append(tool.argumentsJson).append("\n");
+            }
+            toolInfo.append("\n");
+            
+            toolView.setText(toolInfo.toString());
+            layout.addView(toolView);
+        }
+
+        android.widget.ScrollView scrollView = new android.widget.ScrollView(requireContext());
+        scrollView.addView(layout);
+        builder.setView(scrollView);
+
+        builder.setPositiveButton("Approve", (dialog, which) -> callback.onProceed());
+        builder.setNegativeButton("Reject", (dialog, which) -> callback.onCancel());
+
+        builder.show();
+    }
 }

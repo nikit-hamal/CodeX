@@ -71,6 +71,12 @@ public interface StreamingApiClient extends ApiClient {
         void onStreamPartialUpdate(String requestId, String partialResponse, boolean isThinking);
         void onStreamCompleted(String requestId, QwenResponseParser.ParsedResponse response);
         void onStreamError(String requestId, String errorMessage, Throwable throwable);
+        void onToolExecutionRequest(String requestId, List<ChatMessage.ToolUsage> toolUsages, ToolExecutionCallback callback);
+    }
+
+    interface ToolExecutionCallback {
+        void onProceed();
+        void onCancel();
     }
 
     enum RetrySuggestion {

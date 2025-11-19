@@ -358,4 +358,43 @@ public final class FileOps {
         if (content == null) return null;
         return autoFix(relativePath, content, aggressive);
     }
+
+    public static boolean copyFile(File projectDir, String sourcePath, String destPath) throws IOException {
+        File source = new File(projectDir, sourcePath);
+        File dest = new File(projectDir, destPath);
+        if (!source.exists()) return false;
+        File parent = dest.getParentFile();
+        if (parent != null) parent.mkdirs();
+        Files.copy(source.toPath(), dest.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        return true;
+    }
+
+    public static String applyDiffPatch(String originalContent, String diff) {
+        if (originalContent == null || diff == null) return originalContent;
+        
+        String searchMarker = "<<<<<<< SEARCH";
+        String midMarker = "=======";
+        String replaceMarker = ">>>>>>> REPLACE";
+
+        int searchStart = diff.indexOf(searchMarker);
+        int midStart = diff.indexOf(midMarker);
+        int replaceEnd = diff.lastIndexOf(replaceMarker);
+
+        if (searchStart == -1 || midStart == -1 || replaceEnd == -1) {
+            return null; // Invalid diff format
+        }
+
+        String searchBlock = diff.substring(searchStart + searchMarker.length(), midStart).trim();
+        String replaceBlock = diff.substring(midStart + midMarker.length(), replaceEnd).trim();
+
+        // Normalize line endings for comparison
+        String normalizedOriginal = originalContent.replace("\r\n", "\n");
+        String normalizedSearch = searchBlock.replace("\r\n", "\n");
+        
+        if (normalizedOriginal.contains(normalizedSearch)) {
+            return normalizedOriginal.replace(normalizedSearch, replaceBlock);
+        }
+        
+        return null; // Search block not found
+    }
 }
