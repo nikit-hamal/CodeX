@@ -3,14 +3,11 @@ package com.codex.apk;
 import android.content.Context;
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import com.codex.apk.ai.AIModel;
-import com.codex.apk.ai.AIProvider;
 
-public class AIAssistant {
+public class AIAssistant implements StreamingApiClient.StreamListener {
 
     private ApiClient apiClient;
     private AIModel currentModel;
@@ -41,8 +38,6 @@ public class AIAssistant {
     }
 
     public void sendPrompt(String userPrompt, List<ChatMessage> chatHistory, QwenConversationState qwenState, String fileName, String fileContent) {
-        // For now, attachments are not handled in this refactored version.
-        // This would need to be threaded through if a model that uses them is selected.
         sendMessage(userPrompt, chatHistory, qwenState, new ArrayList<>(), fileName, fileContent);
     }
 
@@ -51,7 +46,6 @@ public class AIAssistant {
     }
 
     public void sendMessage(String message, List<ChatMessage> chatHistory, QwenConversationState qwenState, List<File> attachments, String fileName, String fileContent) {
-        // This method is now deprecated, route to streaming.
         sendMessageStreaming(message, chatHistory, qwenState, attachments, fileName, fileContent);
     }
 
@@ -78,12 +72,82 @@ public class AIAssistant {
                 .attachments(attachments)
                 .build();
 
-            ((StreamingApiClient) apiClient).sendMessageStreaming(request, (StreamingApiClient.StreamListener) actionListener);
+            ((StreamingApiClient) apiClient).sendMessageStreaming(request, this);
         } else {
             if (actionListener != null) {
                 actionListener.onAiError("API client for " + currentModel.getProvider() + " not found.");
             }
         }
+    }
+
+    // --- StreamListener Implementation ---
+
+    @Override
+    public void onStreamStarted(String requestId) {
+        if (actionListener != null) actionListener.onAiRequestStarted();
+    }
+
+    @Override
+    public void onStreamPartialUpdate(String requestId, String partialResponse, boolean isThinking) {
+        if (actionListener != null) actionListener.onAiStreamUpdate(partialResponse, isThinking);
+    }
+
+    @Override
+    public void onStreamCompleted(String requestId, QwenResponseParser.ParsedResponse response) {
+        if (actionListener != null) {
+            if (response.isValid) {
+                // For now, we pass empty lists for legacy arguments as the new flow uses tool calls
+                actionListener.onAiActionsProcessed(response.rawResponse, response.explanation, new ArrayList<>(), new ArrayList<>(), currentModel.getDisplayName());
+            } else {
+                actionListener.onAiActionsProcessed(response.rawResponse, response.explanation, new ArrayList<>(), new ArrayList<>(), currentModel.getDisplayName());
+            }
+            actionListener.onAiRequestCompleted();
+        }
+    }
+
+    @Override
+    public void onStreamError(String requestId, String errorMessage, Throwable throwable) {
+        if (actionListener != null) actionListener.onAiError(errorMessage);
+    }
+
+    @Override
+    public void onToolExecutionRequest(String requestId, List<ChatMessage.ToolUsage> toolUsages, StreamingApiClient.ToolExecutionCallback callback) {
+        if (agentModeEnabled) {
+            // Full autonomy: proceed immediately
+            callback.onProceed();
+        } else {
+            // Approval mode: check for unsafe tools
+            boolean hasUnsafeTools = false;
+            for (ChatMessage.ToolUsage usage : toolUsages) {
+                if (isUnsafeTool(usage.toolName)) {
+                    hasUnsafeTools = true;
+                    break;
+                }
+            }
+
+            if (hasUnsafeTools) {
+                // Request user approval via UI listener
+                if (actionListener instanceof OnToolApprovalListener) {
+                    ((OnToolApprovalListener) actionListener).onToolApprovalRequest(toolUsages, callback);
+                } else {
+                    // Fallback if listener doesn't support approval: proceed
+                    callback.onProceed(); 
+                }
+            } else {
+                // Safe tools only: proceed
+                callback.onProceed();
+            }
+        }
+    }
+
+    private boolean isUnsafeTool(String toolName) {
+        // Define tools that modify the file system
+        return "write_to_file".equals(toolName) ||
+               "replace_in_file".equals(toolName) ||
+               "delete_file".equals(toolName) ||
+               "rename_file".equals(toolName) ||
+               "copy_file".equals(toolName) ||
+               "move_file".equals(toolName);
     }
 
     public interface RefreshCallback {
@@ -102,6 +166,11 @@ public class AIAssistant {
         void onAiStreamUpdate(String partialResponse, boolean isThinking);
         void onAiRequestCompleted();
         void onQwenConversationStateUpdated(QwenConversationState state);
+    }
+
+    // New interface for tool approval
+    public interface OnToolApprovalListener extends AIActionListener {
+        void onToolApprovalRequest(List<ChatMessage.ToolUsage> toolUsages, StreamingApiClient.ToolExecutionCallback callback);
     }
 
     // Getters and Setters
