@@ -108,6 +108,11 @@ public class DiffGenerator {
         return generateUnifiedDiff(oldContent, newContent, "original", "modified");
     }
 
+    public static String generateDiffFromReplacement(String originalContent, String search, String replace) {
+        String newContent = originalContent.replace(search, replace);
+        return generateUnifiedDiff(originalContent, newContent, "original", "modified");
+    }
+
     // --- Minimal Myers diff implementation for line sequences ---
     private static class Edit {
         int aStart, aEnd, bStart, bEnd;

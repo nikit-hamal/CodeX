@@ -353,6 +353,55 @@ public final class FileOps {
         return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
     }
 
+    public static File[] listFiles(File projectDir, String relativePath) {
+        File file = new File(projectDir, relativePath);
+        if (!file.exists() || !file.isDirectory()) return null;
+        return file.listFiles();
+    }
+
+    public static String recursiveListFiles(File projectDir, String relativePath) {
+        File file = new File(projectDir, relativePath);
+        if (!file.exists() || !file.isDirectory()) return "";
+        return buildFileTree(file, 10, 1000);
+    }
+
+    public static void copyFile(File projectDir, String sourcePath, String destinationPath) throws java.io.IOException {
+        File source = new File(projectDir, sourcePath);
+        File destination = new File(projectDir, destinationPath);
+        Files.copy(source.toPath(), destination.toPath());
+    }
+
+    public static void moveFile(File projectDir, String sourcePath, String destinationPath) throws java.io.IOException {
+        File source = new File(projectDir, sourcePath);
+        File destination = new File(projectDir, destinationPath);
+        Files.move(source.toPath(), destination.toPath());
+    }
+
+    public static JsonArray listCodeDefinitionNames(File directory) throws IOException {
+        JsonArray definitions = new JsonArray();
+        Pattern classPattern = Pattern.compile("class\\s+([\\w\\d_]+)");
+        Pattern functionPattern = Pattern.compile("function\\s+([\\w\\d_]+)");
+
+        Files.walk(directory.toPath())
+            .filter(Files::isRegularFile)
+            .forEach(path -> {
+                try {
+                    String content = new String(Files.readAllBytes(path));
+                    Matcher classMatcher = classPattern.matcher(content);
+                    while (classMatcher.find()) {
+                        definitions.add(classMatcher.group(1));
+                    }
+                    Matcher functionMatcher = functionPattern.matcher(content);
+                    while (functionMatcher.find()) {
+                        definitions.add(functionMatcher.group(1));
+                    }
+                } catch (IOException e) {
+                    // Ignore files that can't be read
+                }
+            });
+        return definitions;
+    }
+
     public static String autoFix(File projectDir, String relativePath, boolean aggressive) throws java.io.IOException {
         String content = readFile(projectDir, relativePath);
         if (content == null) return null;

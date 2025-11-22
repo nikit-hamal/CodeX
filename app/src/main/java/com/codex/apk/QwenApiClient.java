@@ -471,4 +471,20 @@ public class QwenApiClient implements StreamingApiClient {
                 .connectionPool(pool)
                 .build();
     }
+
+    @Override
+    public String sendMessageSynchronous(MessageRequest request) {
+        try {
+            QwenConversationState state = (QwenConversationState) request.getConversationState();
+            String conversationId = conversationManager.startOrContinueConversation(state, request.getModel(), request.isWebSearchEnabled());
+            if (conversationId == null) {
+                return null;
+            }
+            state.setConversationId(conversationId);
+            return performNonStreamingCompletion(request, state);
+        } catch (IOException e) {
+            Log.e(TAG, "Error in sendMessageSynchronous", e);
+            return null;
+        }
+    }
 }

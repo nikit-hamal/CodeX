@@ -8,6 +8,7 @@ import okhttp3.ConnectionPool;
 public interface StreamingApiClient extends ApiClient {
 
     void sendMessageStreaming(MessageRequest request, StreamListener listener);
+    String sendMessageSynchronous(MessageRequest request);
     void cancelStreaming(String requestId);
     void setConnectionPool(ConnectionPool pool);
 

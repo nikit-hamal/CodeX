@@ -382,7 +382,12 @@ public class EditorActivity extends AppCompatActivity implements
 
     @Override
     public void onAiFileChangeClicked(ChatMessage.FileActionDetail fileActionDetail) {
-        aiAssistantManager.onAiFileChangeClicked(fileActionDetail); // Delegate to AiAssistantManager
+        if ("replace_in_file".equals(fileActionDetail.type)) {
+            String diff = DiffGenerator.generateDiffFromReplacement(fileActionDetail.oldContent, fileActionDetail.search, fileActionDetail.replace);
+            tabManager.openDiffTab(fileActionDetail.path, diff);
+        } else {
+            aiAssistantManager.onAiFileChangeClicked(fileActionDetail); // Delegate to AiAssistantManager for other actions
+        }
     }
 
     @Override

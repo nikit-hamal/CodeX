@@ -125,6 +125,16 @@ public class DialogHelper {
             .show();
     }
 
+    public static void showConfirmationDialog(Context context, String title, String message, String positiveText, String negativeText, android.content.DialogInterface.OnClickListener onPositive, android.content.DialogInterface.OnClickListener onNegative) {
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton(positiveText, onPositive)
+            .setNegativeButton(negativeText, onNegative)
+            .setCancelable(false)
+            .show();
+    }
+
     public void showUnsavedChangesDialog(Runnable onSave, Runnable onDiscard) {
         showConfirmationDialog("Unsaved Changes", "You have unsaved changes. Do you want to save them before exiting?", "Save All", onSave, "Discard", onDiscard);
     }
