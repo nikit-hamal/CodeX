@@ -90,7 +90,7 @@ public class AIAssistant {
                     if (!agentModeEnabled && isFileSystemTool(toolName)) {
                         boolean approved = actionListener.requestUserApproval(toolName, args.toString());
                         if (!approved) {
-                            action-listener.onToolSkipped(toolName);
+                            actionListener.onToolSkipped(toolName);
                             continue; // Skip this tool call
                         }
                     }
