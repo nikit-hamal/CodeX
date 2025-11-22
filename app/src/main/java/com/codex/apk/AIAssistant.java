@@ -1,119 +1,159 @@
 package com.codex.apk;
 
 import android.content.Context;
+import com.codex.apk.ai.AIModel;
+import com.codex.apk.tools.Tool;
+import com.codex.apk.tools.ToolRegistry;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import com.codex.apk.ai.AIModel;
-import com.codex.apk.ai.AIProvider;
 
 public class AIAssistant {
 
-    private ApiClient apiClient;
+    private final ApiClient apiClient;
     private AIModel currentModel;
-    private boolean thinkingModeEnabled = false;
-    private boolean webSearchEnabled = false;
-    private boolean agentModeEnabled = true; // New agent mode flag
-    private List<ToolSpec> enabledTools = new ArrayList<>();
-    private AIAssistant.AIActionListener actionListener;
-    private File projectDir; // Track project directory for tool operations
+    private boolean agentModeEnabled = true;
+    private final AIAssistant.AIActionListener actionListener;
+    private final File projectDir;
+    private final ExecutorService executorService;
+    private final Gson gson = new Gson();
 
-    public AIAssistant(Context context, ExecutorService executorService, AIActionListener actionListener) {
-        this.actionListener = actionListener;
-        this.currentModel = AIModel.fromModelId("qwen3-coder-plus");
-        initializeApiClient(context, null);
-    }
-
-    // Legacy constructor for compatibility
-    public AIAssistant(Context context, String apiKey, File projectDir, String projectName,
-        ExecutorService executorService, AIActionListener actionListener) {
+    public AIAssistant(Context context, ExecutorService executorService, AIActionListener actionListener, File projectDir) {
         this.actionListener = actionListener;
         this.currentModel = AIModel.fromModelId("qwen3-coder-plus");
         this.projectDir = projectDir;
-        initializeApiClient(context, projectDir);
+        this.executorService = executorService;
+        this.apiClient = new QwenApiClient(context, actionListener, projectDir);
     }
 
-    private void initializeApiClient(Context context, File projectDir) {
-        apiClient = new QwenApiClient(context, actionListener, projectDir);
+    public void startAgenticLoop(String userPrompt, List<ChatMessage> chatHistory, QwenConversationState qwenState) {
+        executorService.submit(() -> {
+            runAgenticLoop(userPrompt, chatHistory, qwenState);
+        });
     }
 
-    public void sendPrompt(String userPrompt, List<ChatMessage> chatHistory, QwenConversationState qwenState, String fileName, String fileContent) {
-        // For now, attachments are not handled in this refactored version.
-        // This would need to be threaded through if a model that uses them is selected.
-        sendMessage(userPrompt, chatHistory, qwenState, new ArrayList<>(), fileName, fileContent);
-    }
+    private void runAgenticLoop(String message, List<ChatMessage> chatHistory, QwenConversationState qwenState) {
+        if (!(apiClient instanceof StreamingApiClient)) {
+            actionListener.onAiError("API client is not a StreamingApiClient.");
+            return;
+        }
 
-    public void sendMessage(String message, List<ChatMessage> chatHistory, QwenConversationState qwenState, List<File> attachments) {
-        sendMessage(message, chatHistory, qwenState, attachments, null, null);
-    }
+        StreamingApiClient streamingApiClient = (StreamingApiClient) apiClient;
+        boolean taskComplete = false;
 
-    public void sendMessage(String message, List<ChatMessage> chatHistory, QwenConversationState qwenState, List<File> attachments, String fileName, String fileContent) {
-        // This method is now deprecated, route to streaming.
-        sendMessageStreaming(message, chatHistory, qwenState, attachments, fileName, fileContent);
-    }
+        // Add the initial user message to the history
+        chatHistory.add(new ChatMessage(message, ChatMessage.SENDER_USER));
+        actionListener.onHistoryUpdate(chatHistory);
 
-    public void sendMessageStreaming(String message, List<ChatMessage> chatHistory, QwenConversationState qwenState, List<File> attachments, String fileName, String fileContent) {
-        if (apiClient instanceof StreamingApiClient) {
-             String finalMessage = message;
-            if (fileContent != null && !fileContent.isEmpty()) {
-                finalMessage = "File `" + fileName + "`:\n```\n" + fileContent + "\n```\n\n" + message;
-            }
-
-            String system = agentModeEnabled ? PromptManager.getDefaultFileOpsPrompt() : PromptManager.getDefaultGeneralPrompt();
-            if (system != null && !system.isEmpty()) {
-                finalMessage = system + "\n\n" + finalMessage;
-            }
-
+        while (!taskComplete) {
             StreamingApiClient.MessageRequest request = new StreamingApiClient.MessageRequest.Builder()
-                .message(finalMessage)
+                .message(message)
                 .history(chatHistory)
                 .model(currentModel)
                 .conversationState(qwenState)
-                .thinkingModeEnabled(thinkingModeEnabled)
-                .webSearchEnabled(webSearchEnabled)
-                .enabledTools(enabledTools)
-                .attachments(attachments)
                 .build();
 
-            ((StreamingApiClient) apiClient).sendMessageStreaming(request, (StreamingApiClient.StreamListener) actionListener);
-        } else {
-            if (actionListener != null) {
-                actionListener.onAiError("API client for " + currentModel.getProvider() + " not found.");
+            // This is a synchronous call for simplicity in the loop.
+            // The actual implementation would need to handle the streaming response.
+            String rawResponse = streamingApiClient.sendMessageSynchronous(request); // Assuming this method exists for simplicity
+
+            if (rawResponse == null || rawResponse.isEmpty()) {
+                actionListener.onAiError("Received an empty response from the AI.");
+                break;
+            }
+
+            try {
+                JsonArray toolCalls = JsonParser.parseString(rawResponse).getAsJsonArray();
+                List<JsonObject> toolResults = new ArrayList<>();
+
+                for (JsonElement toolCallElement : toolCalls) {
+                    JsonObject toolCall = toolCallElement.getAsJsonObject();
+                    String toolName = toolCall.get("name").getAsString();
+                    JsonObject args = toolCall.getAsJsonObject("args");
+
+                    Tool tool = ToolRegistry.getTool(toolName);
+                    if (tool == null) {
+                        actionListener.onAiError("Unknown tool: " + toolName);
+                        continue;
+                    }
+
+                    // Add a message to the UI to show the tool call
+                    actionListener.onToolCall(toolName, args.toString());
+
+                    // Implement Agent Mode logic
+                    if (!agentModeEnabled && isFileSystemTool(toolName)) {
+                        boolean approved = actionListener.requestUserApproval(toolName, args.toString());
+                        if (!approved) {
+                            actionListener.onToolSkipped(toolName);
+                            continue; // Skip this tool call
+                        }
+                    }
+
+                    JsonObject result = tool.execute(projectDir, args);
+                    toolResults.add(result);
+
+                    // Add a message to the UI to show the tool result
+                    actionListener.onToolResult(toolName, result.toString());
+
+                    if ("attempt_completion".equals(toolName)) {
+                        taskComplete = true;
+                        break;
+                    }
+                    if ("ask_followup_question".equals(toolName)) {
+                        // The loop will break and wait for the next user message
+                        taskComplete = true;
+                        break;
+                    }
+                }
+
+                if (!taskComplete) {
+                    // Prepare the next message with the tool results
+                    message = gson.toJson(toolResults);
+                    chatHistory.add(new ChatMessage(message, ChatMessage.SENDER_AI_TOOL_RESULT));
+                    actionListener.onHistoryUpdate(chatHistory);
+                }
+
+            } catch (Exception e) {
+                actionListener.onAiError("Error processing AI response: " + e.getMessage());
+                taskComplete = true;
             }
         }
     }
 
-    public interface RefreshCallback {
-        void onRefreshComplete(boolean success, String message);
+    private boolean isFileSystemTool(String toolName) {
+        switch (toolName) {
+            case "write_to_file":
+            case "replace_in_file":
+            case "rename_file":
+            case "delete_file":
+            case "copy_file":
+            case "move_file":
+                return true;
+            default:
+                return false;
+        }
     }
 
-    public interface AIActionListener {
-        void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions,
-                                 List<ChatMessage.FileActionDetail> proposedFileChanges, String aiModelDisplayName);
-        void onAiActionsProcessed(String rawAiResponseJson, String explanation, List<String> suggestions,
-                                 List<ChatMessage.FileActionDetail> proposedFileChanges,
-                                 List<ChatMessage.PlanStep> planSteps,
-                                 String aiModelDisplayName);
+    public interface AIActionListener extends StreamingApiClient.StreamListener {
+        void onHistoryUpdate(List<ChatMessage> chatHistory);
+        boolean requestUserApproval(String toolName, String args);
+        void onToolCall(String toolName, String args);
+        void onToolResult(String toolName, String result);
+        void onToolSkipped(String toolName);
         void onAiError(String errorMessage);
         void onAiRequestStarted();
-        void onAiStreamUpdate(String partialResponse, boolean isThinking);
         void onAiRequestCompleted();
-        void onQwenConversationStateUpdated(QwenConversationState state);
     }
 
     // Getters and Setters
-    public AIModel getCurrentModel() { return currentModel; }
-    public void setCurrentModel(AIModel model) { this.currentModel = model; }
-    public boolean isThinkingModeEnabled() { return thinkingModeEnabled; }
-    public void setThinkingModeEnabled(boolean enabled) { this.thinkingModeEnabled = enabled; }
-    public boolean isWebSearchEnabled() { return webSearchEnabled; }
-    public void setWebSearchEnabled(boolean enabled) { this.webSearchEnabled = enabled; }
-    public boolean isAgentModeEnabled() { return agentModeEnabled; }
     public void setAgentModeEnabled(boolean enabled) { this.agentModeEnabled = enabled; }
-    public void setEnabledTools(List<ToolSpec> tools) { this.enabledTools = tools; }
-    public void setActionListener(AIActionListener listener) { this.actionListener = listener; }
-    public void shutdown() {}
+    public boolean isAgentModeEnabled() { return agentModeEnabled; }
+    public void setCurrentModel(AIModel model) { this.currentModel = model; }
+    public AIModel getCurrentModel() { return currentModel; }
 }

@@ -100,4 +100,8 @@
     <color name="chip_text_selected">#FFFFFF</color>
 
     <color name="main_activity_background">#F8F9FA</color>
+
+    <!-- Tool Message Colors -->
+    <color name="tool_call_background">#4A4A4A</color>
+    <color name="tool_result_background">#6A6A6A</color>
 </resources>
